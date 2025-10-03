@@ -17,31 +17,48 @@ export function venueFromId(photoId) {
 }
 
 export function candidatePublicIds(photoId, startDateISO) {
+  // Always try Month-in-path FIRST, then no-month
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const venue = venueFromId(photoId);
   const start = dayjs(startDateISO || new Date());
-  const ids = [];
-  for (let d = 0; d < 60; d++) {
+
+  // Try both ID casings to avoid case-sensitivity surprises
+  const idsToTry = [photoId, (photoId || "").toUpperCase(), (photoId || "").toLowerCase()]
+    .filter((v, i, a) => v && a.indexOf(v) === i);
+
+  const candidates = [];
+  for (let d = 0; d < 90; d++) { // look back 90 days
     const date = start.subtract(d, "day");
     const Y = date.format("YYYY");
-    const Mtext = MONTHS[date.month()];
-    const mdY = date.format("MM.DD.YYYY");
-    ids.push(`${venue}/${Y}/${Mtext}/${mdY}/${photoId}`); // with Month folder
-    ids.push(`${venue}/${Y}/${mdY}/${photoId}`);          // no Month folder
+    const Mtext = MONTHS[date.month()];   // e.g., "September"
+    const mdY = date.format("MM.DD.YYYY"); // e.g., "09.28.2025"
+
+    for (const idVariant of idsToTry) {
+      // 1) With Month folder (PRIORITY)
+      candidates.push(`${venue}/${Y}/${Mtext}/${mdY}/${idVariant}`);
+      // 2) Without Month folder (fallback)
+      candidates.push(`${venue}/${Y}/${mdY}/${idVariant}`);
+    }
   }
-  return ids;
+  return candidates;
 }
 
 export async function resolveExistingPublicId(photoId, startDateISO) {
   const candidates = candidatePublicIds(photoId, startDateISO);
+
   for (const pubId of candidates) {
     try {
+      console.log("Trying public_id:", pubId);
       await cloudinary.api.resource(pubId, { resource_type: "image" });
+      console.log("FOUND:", pubId);
       return pubId;
-    } catch (_) {}
+    } catch (e) {
+      // continue to next
+    }
   }
+  console.warn("No match for photoId:", photoId);
   return null;
 }
-
 export function neighborIds(photoId) {
   const digits = (photoId.match(/(\d+)$/) || [])[1] || "";
   const prefix = photoId.slice(0, photoId.length - digits.length);
