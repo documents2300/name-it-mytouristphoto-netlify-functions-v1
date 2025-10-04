@@ -1,40 +1,52 @@
 <div>
-  <p><strong>Paste a Cloudinary image URL</strong> 
-     (or a public_id path like 
-     <code>chiefs-luau/2025/September/09.28.2025/CH0928251007</code>) 
+  <p><strong>Paste a Cloudinary image URL</strong>
+     (or a public_id path like
+     <code>chiefs-luau/2025/September/09.28.2025/CH0928251007</code>)
      then click Load.</p>
+
   <input id="inp" style="width: 600px" placeholder="Full URL or public_id path" />
   <button id="goBtn">Load</button>
+
   <div id="msg" style="margin-top:8px;color:#888"></div>
-  <div id="row" style="display:flex;gap:12px;margin-top:12px"></div>
+  <div id="row" style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap"></div>
 </div>
 
 <script>
-  const CLOUD = "dvqpndvej"; // 👈 replace with your cloud name if different
+  const CLOUD = "dvqpndvej"; // 👈 your Cloudinary cloud name
+
   const row = document.getElementById("row");
   const msg = document.getElementById("msg");
+  const goBtn = document.getElementById("goBtn");
 
+  // Accept either a full Cloudinary URL or a public_id path
   function toPublicId(input) {
+    input = input.trim();
+    if (!input) return "";
+
+    // Full delivery URL -> extract public_id (no extension)
     if (/res\.cloudinary\.com/.test(input)) {
       const m = input.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
       return m ? m[1] : input;
     }
-    return input;
+    // Otherwise assume they gave a public_id path directly
+    return input.replace(/^\/+/, "");
   }
 
+  // From "CH0928251007" -> ["CH0928251006","CH0928251007","CH0928251008"]
   function plusMinusOne(id) {
     const digits = (id.match(/(\d+)$/) || [])[1] || "";
     const prefix = id.slice(0, id.length - digits.length);
     const n = parseInt(digits || "0", 10);
-    return [`${prefix}${n-1}`, id, `${prefix}${n+1}`];
+    return [`${prefix}${n-1}`, `${prefix}${n}`, `${prefix}${n+1}`];
   }
 
+  // Plain original image delivery (no transforms), .jpg extension
   function deliveryUrl(pubId) {
     return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
   }
 
   function loadImg(url) {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const img = new Image();
       img.onload = () => resolve({ ok: true, url });
       img.onerror = () => resolve({ ok: false, url });
@@ -42,40 +54,44 @@
     });
   }
 
-  document.getElementById("goBtn").onclick = async () => {
+  function cardHTML(url) {
+    const label = url.replace(/^https?:\/\/[^/]+\/image\/upload\//, "");
+    return `
+      <div style="width:340px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+        <img src="${url}" style="display:block;width:100%;height:auto;background:#f6f6f6" />
+        <div style="padding:8px 10px;font:13px system-ui, sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${label}
+        </div>
+      </div>
+    `;
+  }
+
+  goBtn.onclick = async () => {
     row.innerHTML = "";
     msg.textContent = "Checking…";
 
-    const raw = document.getElementById("inp").value.trim();
-    if (!raw) return;
-
+    const raw = document.getElementById("inp").value;
     const mainPubId = toPublicId(raw);
+    if (!mainPubId) { msg.textContent = "Enter a URL or public_id path."; return; }
+
+    // Split into folder + file
     const folder = mainPubId.replace(/\/[^/]+$/, "");
-    const file   = mainPubId.split("/").pop();
+    const file   = mainPubId.split("/").pop(); // e.g. CH0928251007
+
+    // Build the neighbor file names (-1, 0, +1) in the SAME folder
     const [prev, cur, next] = plusMinusOne(file);
+    const candidates = [`${folder}/${prev}`, `${folder}/${cur}`, `${folder}/${next}`];
 
-    const candidates = [
-      `${folder}/${prev}`,
-      `${folder}/${cur}`,
-      `${folder}/${next}`,
-    ];
-
+    // Test-load each image via plain delivery URL
     const checks = await Promise.all(candidates.map(p => loadImg(deliveryUrl(p))));
     const found = checks.filter(c => c.ok);
 
-    msg.textContent = found.length ? "" : "None of the 3 images existed.";
-    for (const c of found) {
-      const card = document.createElement("div");
-      card.style.width = "320px";
-      card.style.border = "1px solid #ddd";
-      card.style.borderRadius = "8px";
-      card.style.overflow = "hidden";
-      card.innerHTML = `
-        <img src="${c.url}" style="display:block;width:100%;height:auto" />
-        <div style="padding:6px 8px;font:14px system-ui, sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-          ${c.url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}
-        </div>`;
-      row.appendChild(card);
+    if (!found.length) {
+      msg.textContent = "None of the 3 images existed. Double-check the folder and file names.";
+      return;
     }
+
+    msg.textContent = "";
+    row.innerHTML = found.map(c => cardHTML(c.url)).join("");
   };
 </script>
