@@ -19,7 +19,7 @@
       letter-spacing: 0.5px;
       margin-bottom: 12px;
     }
-    p, li {
+    p {
       color: #aaa;
       font-size: 16px;
       line-height: 1.5;
@@ -98,7 +98,6 @@
 
   <script>
     const CLOUD = "dvqpndvej";
-
     const $ = s => document.querySelector(s);
     const msg = $("#msg");
     const row = $("#row");
@@ -110,34 +109,28 @@
     const addCard = (url, label) => {
       const card = document.createElement("div");
       card.className = "card";
-      card.innerHTML = `
-        <img src="${url}" alt="">
-        <div class="cap">${label}</div>`;
+      card.innerHTML = `<img src="${url}" alt=""><div class="cap">${label}</div>`;
       row.appendChild(card);
     };
 
     function plusMinusOne(id) {
-      const digits = (id.match(/(\\d+)$/)||[])[1]||"";
+      const digits = (id.match(/(\\d+)$/) || [])[1] || "";
       const prefix = id.slice(0, id.length - digits.length);
-      const n = parseInt(digits||"0", 10);
+      const n = parseInt(digits || "0", 10);
       return [`${prefix}${n-1}`, id, `${prefix}${n+1}`];
     }
 
     async function findExistingPublicId(shortId) {
-      const venues = ["chiefs-luau","ka-moana-luau"];
+      const venues = ["chiefs-luau"];
       const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
       const start = new Date();
-      for (let d=0; d<90; d++) {
-        const dt = new Date(start); dt.setDate(start.getDate()-d);
+      for (let d = 0; d < 90; d++) {
+        const dt = new Date(start); dt.setDate(start.getDate() - d);
         const Y = dt.getFullYear();
         const Mtxt = months[dt.getMonth()];
-        const mdY = ("0"+(dt.getMonth()+1)).slice(-2)+"."+("0"+dt.getDate()).slice(-2)+"."+Y;
-        for (const v of venues) {
-          const withMonth = `${v}/${Y}/${Mtxt}/${mdY}/${shortId}`;
-          if (await headOK(deliveryUrl(withMonth))) return withMonth;
-          const noMonth = `${v}/${Y}/${mdY}/${shortId}`;
-          if (await headOK(deliveryUrl(noMonth))) return noMonth;
-        }
+        const mdY = ("0" + (dt.getMonth() + 1)).slice(-2) + "." + ("0" + dt.getDate()).slice(-2) + "." + Y;
+        const withMonth = `${venues[0]}/${Y}/${Mtxt}/${mdY}/${shortId}`;
+        if (await headOK(deliveryUrl(withMonth))) return withMonth;
       }
       return null;
     }
@@ -145,20 +138,20 @@
     $("#goBtn").onclick = async () => {
       row.innerHTML = "";
       msg.textContent = "";
-      const raw = ($("#photoId").value||"").trim();
-      if (!raw){ msg.textContent = "Please enter your Photo ID."; return; }
+      const raw = ($("#photoId").value || "").trim();
+      if (!raw) { msg.textContent = "Please enter your Photo ID."; return; }
 
       msg.textContent = "Searching...";
       const publicId = await findExistingPublicId(raw);
-      if (!publicId){ msg.textContent = "No image found."; return; }
+      if (!publicId) { msg.textContent = "No image found."; return; }
 
       const folder = publicId.replace(/\\/[^/]+$/, "");
       const file = publicId.split("/").pop();
       const [prev, cur, next] = plusMinusOne(file);
       const candidates = [`${folder}/${prev}`, `${folder}/${cur}`, `${folder}/${next}`];
 
-      const checks = await Promise.all(candidates.map(p => headOK(deliveryUrl(p)).then(ok => ({ok, p}))));
-      const found = checks.filter(c=>c.ok);
+      const checks = await Promise.all(candidates.map(p => headOK(deliveryUrl(p)).then(ok => ({ ok, p }))));
+      const found = checks.filter(c => c.ok);
       found.forEach(c => addCard(deliveryUrl(c.p), c.p));
       msg.textContent = found.length ? "Done." : "None found.";
     };
