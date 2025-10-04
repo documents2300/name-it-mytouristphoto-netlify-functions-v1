@@ -37,7 +37,7 @@ export function candidatePublicIds(photoId, startDateISO) {
   for (let d = 0; d < 90; d++) { // look back 90 days
     const date = start.subtract(d, "day");
     const Y    = date.format("YYYY");
-    const Mtxt = MONTHS[date.month()];     // e.g., "September"
+    const Mtxt = MONTHS[date.month()];      // e.g., "September"
     const mdY  = date.format("MM.DD.YYYY"); // e.g., "09.28.2025"
 
     for (const idVariant of idsToTry) {
