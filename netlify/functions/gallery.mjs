@@ -4,28 +4,49 @@ import {
   buildPreviewUrl,
   buildDownloadUrl,
   photoSetIdFromPublicId,
-} from "./helpers.mjs"; // <- note: no neighborIds import
+} from "./helpers.mjs";
 
-// ... keep MEM helpers as you have them ...
+// ---- In-memory entitlement store (OK for demo; use a DB for production)
+const MEM = {
+  entitlements: new Map(), // photo_set_id -> { free_redeemed, free_asset_public_id, redeemed_at }
+  purchases: new Map(),    // photo_set_id -> Set(public_id)
+};
 
+function getEntitlements(photo_set_id) {
+  return (
+    MEM.entitlements.get(photo_set_id) || {
+      free_redeemed: 0,
+      free_asset_public_id: null,
+      redeemed_at: null,
+    }
+  );
+}
+
+function getPurchasedSet(photo_set_id) {
+  if (!MEM.purchases.has(photo_set_id)) MEM.purchases.set(photo_set_id, new Set());
+  return MEM.purchases.get(photo_set_id);
+}
+
+// ---- Main handler
 export async function handler(event) {
   try {
     const photoId = event.path.split("/").pop();
     const startDateISO = (event.queryStringParameters || {}).startDateISO;
 
-    // 1) Resolve the main public_id
+    // 1) Resolve main public_id (tries Month-in-path first, then without Month)
     const mainPub = await resolveExistingPublicId(photoId, startDateISO);
     if (!mainPub) {
       return { statusCode: 404, body: JSON.stringify({ error: "Photo not found" }) };
     }
 
-    // 2) Entitlements & purchases (as you had)
+    // 2) Entitlements & purchases
     const photo_set_id = photoSetIdFromPublicId(mainPub);
     const ent = getEntitlements(photo_set_id);
     const purchased = getPurchasedSet(photo_set_id);
 
     const mk = (label, publicId, isMain) => {
       if (!publicId) return null;
+
       const isFreeAsset = ent.free_redeemed && ent.free_asset_public_id === publicId;
       const isPurchased = purchased.has(publicId);
 
@@ -39,21 +60,19 @@ export async function handler(event) {
       return { label, publicId, previewUrl: buildPreviewUrl(publicId), action };
     };
 
-    // 3) Always include main
+    // 3) Always include main asset
     const assets = [mk("Main Pose", mainPub, true)].filter(Boolean);
 
-    // 4) Add neighbors (±1). If you want wider, change to [-2,-1,1,2]
+    // 4) Neighbors: ±1 from numeric tail of the ID
     const neighborOffsets = [-1, 1];
     const digits = (photoId.match(/(\d+)$/) || [])[1] || "";
     const prefix = photoId.slice(0, photoId.length - digits.length);
 
     for (const off of neighborOffsets) {
-      const neighborId = `${prefix}${parseInt(digits, 10) + off}`;
+      const neighborId = `${prefix}${parseInt(digits || "0", 10) + off}`;
       const neighborPub = await resolveExistingPublicId(neighborId, startDateISO);
       if (neighborPub) {
-        assets.push(
-          mk(off < 0 ? "Previous pose" : "Next pose", neighborPub, false)
-        );
+        assets.push(mk(off < 0 ? "Previous pose" : "Next pose", neighborPub, false));
       }
     }
 
