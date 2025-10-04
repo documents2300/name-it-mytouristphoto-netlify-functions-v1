@@ -1,83 +1,167 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>MyTouristPhoto</title>
+  <meta charset="utf-8" />
+  <title>Find your photos</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { font-family: system-ui, sans-serif; padding: 20px; }
-    #row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
-    .card { width: 320px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
-    .card img { display: block; width: 100%; height: auto; }
-    .card div { padding: 6px 8px; font: 14px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:24px}
+    h1{font-size:22px;margin:0 0 12px}
+    #wrap{max-width:900px}
+    #row{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+    .card{width:320px;border:1px solid #ddd;border-radius:8px;overflow:hidden}
+    .cap{padding:8px 10px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    input[type=text]{width:600px;max-width:90vw;padding:6px 8px}
+    button{padding:6px 10px;cursor:pointer}
+    #msg{color:#777;margin-top:8px;height:20px}
   </style>
 </head>
 <body>
-  <h2>Find your photos</h2>
-  <p>Enter your Photo ID (e.g. <code>CH0928251007</code>) and click Load.</p>
-  <input id="inp" style="width:400px" />
+<div id="wrap">
+  <h1>Find your photos</h1>
+  <p>Enter your Photo ID (e.g., <code>CH0928251007</code>) and click Load.</p>
+  <input id="photoId" type="text" placeholder="CH0928251007 or a Cloudinary URL" />
   <button id="goBtn">Load</button>
-  <div id="msg" style="margin-top:8px;color:#888"></div>
+  <div id="msg"></div>
   <div id="row"></div>
+</div>
 
-  <script>
-    const CLOUD = "dvqpndvej"; // 👈 your Cloudinary cloud
+<script>
+  // 👉 Your Cloudinary cloud name:
+  const CLOUD = "dvqpndvej";
 
-    function deliveryUrl(pubId) {
-      return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
+  // --- tiny DOM helpers ---
+  const $ = s => document.querySelector(s);
+  const row = $("#row"), msg = $("#msg");
+
+  function addCard(url, label){
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML =
+      `<img src="${url}" style="display:block;width:100%;height:auto" alt="">
+       <div class="cap">${label}</div>`;
+    row.appendChild(div);
+  }
+
+  // Build a Cloudinary delivery URL from a public_id
+  const deliveryUrl = pubId => `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
+
+  // Load-check via <img> (works cross-origin)
+  function loadImg(url){
+    return new Promise(resolve=>{
+      const img = new Image();
+      img.onload = () => resolve({ok:true,url});
+      img.onerror = () => resolve({ok:false,url});
+      img.src = url;
+    });
+  }
+
+  // If user pasted a full Cloudinary URL, extract public_id
+  function toPublicId(input){
+    if (/res\.cloudinary\.com/.test(input)){
+      // grab the part after /image/upload/(v123/)? ... until extension
+      const m = input.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
+      return m ? m[1] : input;
+    }
+    return input;
+  }
+
+  // Venue from ID prefix (CH... → chiefs-luau, KL... → ka-moana-luau)
+  function venueFromId(id){
+    const p = (id||"").toUpperCase();
+    return p.startsWith("KL") ? "ka-moana-luau" : "chiefs-luau";
+  }
+
+  // Format helpers (no libraries)
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const pad2 = n => String(n).padStart(2,"0");
+  function dateParts(d){
+    const Y = d.getFullYear();
+    const Mtxt = MONTHS[d.getMonth()];
+    const mdY = `${pad2(d.getMonth()+1)}.${pad2(d.getDate())}.${Y}`;
+    return {Y, Mtxt, mdY};
+  }
+
+  // Create candidate public_ids for the last N days (with and without Month folder)
+  function buildCandidatesFor(id, days=60){
+    const venue = venueFromId(id);
+    const out = [];
+    for (let i=0;i<=days;i++){
+      const d = new Date(Date.now() - i*864e5);
+      const {Y,Mtxt,mdY} = dateParts(d);
+      out.push(`${venue}/${Y}/${Mtxt}/${mdY}/${id}`); // with Month folder
+      out.push(`${venue}/${Y}/${mdY}/${id}`);         // without Month folder
+    }
+    return out;
+  }
+
+  // Find first existing public_id by probing delivery URLs (sequentially, small batches)
+  async function findExistingPublicId(id){
+    const cands = buildCandidatesFor(id, 90);
+    const batchSize = 6;
+    for (let i=0;i<cands.length;i+=batchSize){
+      const batch = cands.slice(i,i+batchSize);
+      const results = await Promise.all(batch.map(p => loadImg(deliveryUrl(p))));
+      const idx = results.findIndex(r => r.ok);
+      if (idx !== -1) return batch[idx]; // return first that exists
+    }
+    return null;
+  }
+
+  // Increment/decrement ONLY the trailing 3–6 digits, preserve zero padding
+  function bumpTail(id, delta){
+    const m = (id||"").match(/^(.*?)(\d{3,6})$/);
+    if (!m) return null;
+    const [, pre, tail] = m;
+    const width = tail.length;
+    const num = Number(tail) + delta;
+    if (num < 0) return null;
+    return pre + String(num).padStart(width, "0");
+  }
+  const plusMinusOne = id => [bumpTail(id,-1), id, bumpTail(id,1)].filter(Boolean);
+
+  // Click handler: find MAIN → then neighbors from SAME folder
+  $("#goBtn").onclick = async () => {
+    row.innerHTML = "";
+    msg.textContent = "Checking…";
+
+    const raw = $("#photoId").value.trim();
+    if (!raw){ msg.textContent = "Please enter your Photo ID."; return; }
+
+    // Accept: short ID, public_id, or full URL
+    let pubId = toPublicId(raw);
+    let foundPublicId = null;
+
+    if (pubId.includes("/")){
+      // full public_id provided
+      const ok = (await loadImg(deliveryUrl(pubId))).ok;
+      foundPublicId = ok ? pubId : null;
+    } else {
+      // short ID → probe recent dates to find folder
+      foundPublicId = await findExistingPublicId(pubId);
     }
 
-    function plusMinusOne(id) {
-      const digits = (id.match(/(\d+)$/) || [])[1] || "";
-      const prefix = id.slice(0, id.length - digits.length);
-      const n = parseInt(digits || "0", 10);
-      return [`${prefix}${n - 1}`, id, `${prefix}${n + 1}`];
+    if (!foundPublicId){
+      msg.textContent = "Sorry, we couldn’t find that ID.";
+      return;
     }
 
-    function loadImg(url) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve({ ok: true, url });
-        img.onerror = () => resolve({ ok: false, url });
-        img.src = url;
-      });
+    // Show main
+    addCard(deliveryUrl(foundPublicId), foundPublicId);
+
+    // Neighbors from SAME folder
+    const folder = foundPublicId.replace(/\/[^/]+$/, "");
+    const file   = foundPublicId.split("/").pop();
+    const [prev, cur, next] = plusMinusOne(file);
+    const picks = [prev, next].filter(Boolean).map(f => `${folder}/${f}`);
+
+    if (picks.length){
+      const checks = await Promise.all(picks.map(p => loadImg(deliveryUrl(p))));
+      checks.forEach((c,i) => { if (c.ok) addCard(c.url, picks[i]); });
     }
 
-    function addCard(url) {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `
-        <img src="${url}" />
-        <div>${url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}</div>`;
-      document.getElementById("row").appendChild(card);
-    }
-
-    document.getElementById("goBtn").onclick = async () => {
-      const row = document.getElementById("row");
-      const msg = document.getElementById("msg");
-      row.innerHTML = "";
-      msg.textContent = "Checking…";
-
-      const raw = document.getElementById("inp").value.trim();
-      if (!raw) return;
-
-      // Split folder + filename
-      const folder = raw.replace(/\/[^/]+$/, "");
-      const file = raw.split("/").pop();
-      const [prev, cur, next] = plusMinusOne(file);
-
-      // Neighbors in SAME folder
-      const candidates = [
-        `${folder}/${prev}`,
-        `${folder}/${cur}`,
-        `${folder}/${next}`,
-      ];
-
-      const checks = await Promise.all(candidates.map(p => loadImg(deliveryUrl(p))));
-      const found = checks.filter(c => c.ok);
-
-      msg.textContent = found.length ? "" : "None of the 3 images existed.";
-      found.forEach(c => addCard(c.url));
-    };
-  </script>
+    msg.textContent = ""; // clear
+  };
+</script>
 </body>
 </html>
