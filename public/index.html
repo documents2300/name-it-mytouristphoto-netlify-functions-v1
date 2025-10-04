@@ -1,86 +1,81 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MyTouristPhoto — Netlify Functions Demo</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:920px;margin:24px auto;padding:0 16px}
-    input,button{font-size:16px;padding:10px}
-    .row{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px}
-    .card{border:1px solid #ddd;border-radius:10px;padding:12px;width:280px}
-    .card img{width:100%;height:auto;border-radius:8px}
-    .action{margin-top:8px}
-    .err{color:#b00;margin-top:10px}
-  </style>
-</head>
-<body>
-  <h1>MyTouristPhoto — Preview & One-Free-Download</h1>
-  <p>Enter a Photo ID (e.g., <code>ch1001251011</code> or a real one) and click Load.</p>
-  <input id="photoId" placeholder="Photo ID"/>
-  <button id="loadBtn">Load Gallery</button>
-
-  <div id="gallery" class="row"></div>
-  <div id="msg" class="err"></div>
+<div>
+  <p><strong>Paste a Cloudinary image URL</strong> 
+     (or a public_id path like 
+     <code>chiefs-luau/2025/September/09.28.2025/CH0928251007</code>) 
+     then click Load.</p>
+  <input id="inp" style="width: 600px" placeholder="Full URL or public_id path" />
+  <button id="goBtn">Load</button>
+  <div id="msg" style="margin-top:8px;color:#888"></div>
+  <div id="row" style="display:flex;gap:12px;margin-top:12px"></div>
+</div>
 
 <script>
-const $ = (s)=>document.querySelector(s);
-$("#loadBtn").onclick = async () => {
-  $("#gallery").innerHTML = "";
-  $("#msg").textContent = "";
-  const id = $("#photoId").value.trim();
-  if (!id) return;
-  try {
-    // Using redirected path /api/gallery/<id> → /.netlify/functions/gallery/<id>
-    const r = await fetch(`/api/gallery/${encodeURIComponent(id)}`);
-    if (!r.ok) throw new Error("Not found");
-    const data = await r.json();
-    render(data, id);
-  } catch (e) {
-    $("#msg").textContent = e.message;
-  }
-};
-function render(data, photoId) {
-  const $g = $("#gallery");
-  data.assets.forEach(a => {
-    const el = document.createElement("div");
-    el.className = "card";
-    el.innerHTML = \`
-      <div><strong>\${a.label}</strong></div>
-      <img src="\${a.previewUrl}" alt="\${a.label}" />
-      <div class="action"></div>
-    \`;
-    const act = el.querySelector(".action");
-    if (a.action.type === "free") {
-      const b = document.createElement("button");
-      b.textContent = "Get Free Download";
-      b.onclick = async () => {
-        const r = await fetch("/api/redeem", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ photoId, publicId: a.publicId })
-        });
-        const out = await r.json();
-        if (!r.ok) { alert(out.error || "Error"); return; }
-        window.location.href = out.downloadUrl;
-      };
-      act.appendChild(b);
-    } else if (a.action.type === "download") {
-      const l = document.createElement("a");
-      l.href = a.action.url;
-      l.textContent = "Download";
-      l.target = "_blank";
-      l.rel = "noopener";
-      act.appendChild(l);
-    } else {
-      const b = document.createElement("button");
-      b.textContent = "Buy (coming soon)";
-      b.disabled = true;
-      act.appendChild(b);
+  const CLOUD = "dvqpndvej"; // 👈 replace with your cloud name if different
+  const row = document.getElementById("row");
+  const msg = document.getElementById("msg");
+
+  function toPublicId(input) {
+    if (/res\.cloudinary\.com/.test(input)) {
+      const m = input.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
+      return m ? m[1] : input;
     }
-    $g.appendChild(el);
-  });
-}
+    return input;
+  }
+
+  function plusMinusOne(id) {
+    const digits = (id.match(/(\d+)$/) || [])[1] || "";
+    const prefix = id.slice(0, id.length - digits.length);
+    const n = parseInt(digits || "0", 10);
+    return [`${prefix}${n-1}`, id, `${prefix}${n+1}`];
+  }
+
+  function deliveryUrl(pubId) {
+    return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
+  }
+
+  function loadImg(url) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ ok: true, url });
+      img.onerror = () => resolve({ ok: false, url });
+      img.src = url;
+    });
+  }
+
+  document.getElementById("goBtn").onclick = async () => {
+    row.innerHTML = "";
+    msg.textContent = "Checking…";
+
+    const raw = document.getElementById("inp").value.trim();
+    if (!raw) return;
+
+    const mainPubId = toPublicId(raw);
+    const folder = mainPubId.replace(/\/[^/]+$/, "");
+    const file   = mainPubId.split("/").pop();
+    const [prev, cur, next] = plusMinusOne(file);
+
+    const candidates = [
+      `${folder}/${prev}`,
+      `${folder}/${cur}`,
+      `${folder}/${next}`,
+    ];
+
+    const checks = await Promise.all(candidates.map(p => loadImg(deliveryUrl(p))));
+    const found = checks.filter(c => c.ok);
+
+    msg.textContent = found.length ? "" : "None of the 3 images existed.";
+    for (const c of found) {
+      const card = document.createElement("div");
+      card.style.width = "320px";
+      card.style.border = "1px solid #ddd";
+      card.style.borderRadius = "8px";
+      card.style.overflow = "hidden";
+      card.innerHTML = `
+        <img src="${c.url}" style="display:block;width:100%;height:auto" />
+        <div style="padding:6px 8px;font:14px system-ui, sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${c.url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}
+        </div>`;
+      row.appendChild(card);
+    }
+  };
 </script>
-</body>
-</html>
