@@ -1,97 +1,131 @@
-<div>
-  <p><strong>Paste a Cloudinary image URL</strong>
-     (or a public_id path like
-     <code>chiefs-luau/2025/September/09.28.2025/CH0928251007</code>)
-     then click Load.</p>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Find your photos</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+</head>
+<body style="font:16px system-ui,sans-serif;line-height:1.35;padding:20px;max-width:980px;margin:auto">
+  <h2>Find your photos</h2>
+  <p>Enter your Photo ID (e.g. <code>CH0928251007</code>) and click Load.</p>
 
-  <input id="inp" style="width: 600px" placeholder="Full URL or public_id path" />
-  <button id="goBtn">Load</button>
+  <div style="display:flex;gap:8px;align-items:center;margin:12px 0">
+    <input id="photoId" placeholder="CH0928251007" style="flex:1;padding:10px 12px;border:1px solid #ccc;border-radius:8px" />
+    <button id="goBtn" style="padding:10px 14px;border:0;background:#222;color:#fff;border-radius:8px;cursor:pointer">Load</button>
+  </div>
+  <div id="msg" style="color:#666;margin:4px 0 12px"></div>
 
-  <div id="msg" style="margin-top:8px;color:#888"></div>
-  <div id="row" style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap"></div>
-</div>
+  <div id="row" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
 
 <script>
-  const CLOUD = "dvqpndvej"; // 👈 your Cloudinary cloud name
+const CLOUD = "dvqpndvej"; // <-- set your cloud name here
+const MAX_DAYS_BACK = 90;
 
-  const row = document.getElementById("row");
-  const msg = document.getElementById("msg");
-  const goBtn = document.getElementById("goBtn");
+const row = document.getElementById("row");
+const msg = document.getElementById("msg");
+const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-  // Accept either a full Cloudinary URL or a public_id path
-  function toPublicId(input) {
-    input = input.trim();
-    if (!input) return "";
+function imgUrl(pubId) {
+  return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
+}
+function head(url) {
+  return fetch(url, { method: "HEAD", mode: "no-cors" })
+    .then(() => true)     // no-cors HEAD won’t expose status; follow up with img load
+    .catch(() => false);
+}
+function loadOk(url) {
+  return new Promise(resolve => {
+    const i = new Image();
+    i.onload = () => resolve(true);
+    i.onerror = () => resolve(false);
+    i.src = url;
+  });
+}
 
-    // Full delivery URL -> extract public_id (no extension)
-    if (/res\.cloudinary\.com/.test(input)) {
-      const m = input.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
-      return m ? m[1] : input;
+function candidatesForId(id) {
+  const ids = Array.from(new Set([id, id.toUpperCase(), id.toLowerCase()]));
+  const out = [];
+  const now = new Date();
+  for (let d = 0; d < MAX_DAYS_BACK; d++) {
+    const dt = new Date(now);
+    dt.setDate(dt.getDate() - d);
+    const Y = dt.getFullYear();
+    const Mtxt = months[dt.getMonth()];
+    const mdY = String(dt.getMonth()+1).padStart(2,"0") + "." +
+                String(dt.getDate()).padStart(2,"0") + "." + Y;
+    for (const idv of ids) {
+      // with Month folder
+      out.push(`chiefs-luau/${Y}/${Mtxt}/${mdY}/${idv}`);
+      out.push(`ka-moana-luau/${Y}/${Mtxt}/${mdY}/${idv}`);
+      // without Month folder
+      out.push(`chiefs-luau/${Y}/${mdY}/${idv}`);
+      out.push(`ka-moana-luau/${Y}/${mdY}/${idv}`);
     }
-    // Otherwise assume they gave a public_id path directly
-    return input.replace(/^\/+/, "");
+  }
+  return out;
+}
+
+function neighbors(file) {
+  const m = file.match(/(\d+)$/);
+  const digits = m ? m[1] : "";
+  const prefix = file.slice(0, file.length - digits.length);
+  const n = parseInt(digits || "0", 10);
+  return [`${prefix}${n-1}`, file, `${prefix}${n+1}`];
+}
+
+function card(url, label) {
+  const wrap = document.createElement("div");
+  wrap.style.border = "1px solid #ddd";
+  wrap.style.borderRadius = "12px";
+  wrap.style.overflow = "hidden";
+  wrap.innerHTML = `
+    <img src="${url}" style="display:block;width:100%;height:auto" />
+    <div style="padding:8px 10px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+      ${label}
+    </div>`;
+  return wrap;
+}
+
+document.getElementById("goBtn").onclick = async () => {
+  const raw = (document.getElementById("photoId").value || "").trim();
+  row.innerHTML = "";
+  if (!raw) { msg.textContent = "Please enter your Photo ID."; return; }
+  msg.textContent = "Searching across recent dates…";
+
+  // 1) Find the real public_id by probing delivery URLs
+  const cands = candidatesForId(raw);
+  let found = null;
+  // probe in batches to keep it snappy
+  for (let i = 0; i < cands.length && !found; i += 12) {
+    const batch = cands.slice(i, i+12);
+    const tests = await Promise.all(batch.map(p => loadOk(imgUrl(p))));
+    const hitIndex = tests.findIndex(ok => ok);
+    if (hitIndex !== -1) found = batch[hitIndex];
   }
 
-  // From "CH0928251007" -> ["CH0928251006","CH0928251007","CH0928251008"]
-  function plusMinusOne(id) {
-    const digits = (id.match(/(\d+)$/) || [])[1] || "";
-    const prefix = id.slice(0, id.length - digits.length);
-    const n = parseInt(digits || "0", 10);
-    return [`${prefix}${n-1}`, `${prefix}${n}`, `${prefix}${n+1}`];
+  if (!found) {
+    msg.textContent = "Sorry, we couldn’t find that ID in the last 90 days.";
+    return;
   }
 
-  // Plain original image delivery (no transforms), .jpg extension
-  function deliveryUrl(pubId) {
-    return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
+  // 2) Show main + neighbors from the same folder
+  msg.textContent = "";
+  const folder = found.replace(/\/[^/]+$/, "");
+  const file = found.split("/").pop();
+  const [prev, cur, next] = neighbors(file);
+  const picks = [`${folder}/${prev}`, `${folder}/${cur}`, `${folder}/${next}`];
+
+  const results = await Promise.all(picks.map(p => loadOk(imgUrl(p))));
+  results.forEach((ok, i) => {
+    const p = picks[i];
+    if (ok) row.appendChild(card(imgUrl(p), p));
+  });
+
+  if (!row.children.length) {
+    // fall back to at least the main
+    row.appendChild(card(imgUrl(found), found));
   }
-
-  function loadImg(url) {
-    return new Promise(resolve => {
-      const img = new Image();
-      img.onload = () => resolve({ ok: true, url });
-      img.onerror = () => resolve({ ok: false, url });
-      img.src = url;
-    });
-  }
-
-  function cardHTML(url) {
-    const label = url.replace(/^https?:\/\/[^/]+\/image\/upload\//, "");
-    return `
-      <div style="width:340px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
-        <img src="${url}" style="display:block;width:100%;height:auto;background:#f6f6f6" />
-        <div style="padding:8px 10px;font:13px system-ui, sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-          ${label}
-        </div>
-      </div>
-    `;
-  }
-
-  goBtn.onclick = async () => {
-    row.innerHTML = "";
-    msg.textContent = "Checking…";
-
-    const raw = document.getElementById("inp").value;
-    const mainPubId = toPublicId(raw);
-    if (!mainPubId) { msg.textContent = "Enter a URL or public_id path."; return; }
-
-    // Split into folder + file
-    const folder = mainPubId.replace(/\/[^/]+$/, "");
-    const file   = mainPubId.split("/").pop(); // e.g. CH0928251007
-
-    // Build the neighbor file names (-1, 0, +1) in the SAME folder
-    const [prev, cur, next] = plusMinusOne(file);
-    const candidates = [`${folder}/${prev}`, `${folder}/${cur}`, `${folder}/${next}`];
-
-    // Test-load each image via plain delivery URL
-    const checks = await Promise.all(candidates.map(p => loadImg(deliveryUrl(p))));
-    const found = checks.filter(c => c.ok);
-
-    if (!found.length) {
-      msg.textContent = "None of the 3 images existed. Double-check the folder and file names.";
-      return;
-    }
-
-    msg.textContent = "";
-    row.innerHTML = found.map(c => cardHTML(c.url)).join("");
-  };
+};
 </script>
+</body>
+</html>
