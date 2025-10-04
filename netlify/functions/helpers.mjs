@@ -45,7 +45,6 @@ export function candidatePublicIds(photoId, startDateISO) {
 
 export async function resolveExistingPublicId(photoId, startDateISO) {
   const candidates = candidatePublicIds(photoId, startDateISO);
-
   for (const pubId of candidates) {
     try {
       console.log("Trying public_id:", pubId);
@@ -53,13 +52,18 @@ export async function resolveExistingPublicId(photoId, startDateISO) {
       console.log("FOUND:", pubId);
       return pubId;
     } catch (e) {
-      // continue to next
+      console.warn(
+        "FAIL:",
+        pubId,
+        "| code:", e.http_code || e.status || e.statusCode || "?",
+        "| message:", e.message
+      );
+      // keep trying next candidate
     }
   }
   console.warn("No match for photoId:", photoId);
   return null;
-}
-export function neighborIds(photoId) {
+}export function neighborIds(photoId) {
   const digits = (photoId.match(/(\d+)$/) || [])[1] || "";
   const prefix = photoId.slice(0, photoId.length - digits.length);
   const n = parseInt(digits || "0", 10);
