@@ -1,167 +1,230 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Find your photos</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Find your photos — MyTouristPhoto</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:24px}
-    h1{font-size:22px;margin:0 0 12px}
-    #wrap{max-width:900px}
-    #row{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
-    .card{width:320px;border:1px solid #ddd;border-radius:8px;overflow:hidden}
-    .cap{padding:8px 10px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    input[type=text]{width:600px;max-width:90vw;padding:6px 8px}
-    button{padding:6px 10px;cursor:pointer}
-    #msg{color:#777;margin-top:8px;height:20px}
+    :root{
+      --bg:#0b1220; --panel:#12192b; --muted:#9fb0c8; --text:#e9f0ff; --brand:#7aa2ff; --brand-2:#51e0a5;
+      --card:#0f1627; --stroke:#1e2740; --shadow:0 10px 30px rgba(0,0,0,.35);
+      --radius:18px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0; background:var(--bg); color:var(--text); font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif}
+    a{color:var(--brand); text-decoration:none}
+    a:hover{opacity:.9}
+    .wrap{max-width:1100px; margin:0 auto; padding:40px 20px 80px}
+    header{
+      display:grid; gap:10px; margin-bottom:24px;
+    }
+    .kicker{font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--brand-2)}
+    h1{margin:0; font-size:clamp(28px, 4vw, 38px)}
+    .lede{color:var(--muted); max-width:800px}
+
+    .panel{
+      background:var(--panel); border:1px solid var(--stroke); border-radius:var(--radius);
+      padding:18px; box-shadow:var(--shadow); display:grid; gap:14px; margin-top:18px;
+    }
+
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    input[type="text"]{
+      flex:1 1 420px; background:var(--card); color:var(--text);
+      border:1px solid var(--stroke); border-radius:12px; padding:12px 14px; outline:none;
+    }
+    button{
+      background:linear-gradient(135deg,var(--brand),#4f8dff); color:#fff; border:0;
+      padding:12px 16px; border-radius:12px; font-weight:600; cursor:pointer;
+      box-shadow:0 6px 18px rgba(122,162,255,.25);
+    }
+    button:disabled{opacity:.6; cursor:not-allowed}
+    .hint{color:var(--muted); font-size:13px}
+    .steps{display:grid; gap:6px; font-size:14px; color:var(--muted)}
+    .steps code{color:#fff; background:#0b1325; padding:2px 6px; border-radius:8px; border:1px solid var(--stroke)}
+
+    .status{min-height:22px; font-size:14px; color:var(--muted)}
+    .status.ok{color:var(--brand-2)}
+    .status.err{color:#ff7b7b}
+
+    .grid{
+      display:grid; gap:16px; margin-top:18px;
+      grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+    }
+    .card{
+      background:var(--card); border:1px solid var(--stroke); border-radius:16px; overflow:hidden;
+      box-shadow:var(--shadow); display:flex; flex-direction:column;
+    }
+    .thumb{display:block; width:100%; height:200px; object-fit:cover; background:#0a1323}
+    .meta{padding:10px 12px; display:grid; gap:8px}
+    .pill{
+      display:inline-flex; align-items:center; gap:6px; font-size:12px;
+      color:var(--muted); background:#0b1325; border:1px solid var(--stroke); padding:4px 8px; border-radius:999px;
+    }
+    .path{font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    .actions{display:flex; gap:10px; margin-top:2px}
+    .ghost{
+      background:transparent; color:var(--brand); border:1px solid var(--stroke);
+      padding:8px 10px; border-radius:10px; cursor:pointer;
+    }
+    .small{font-size:12px}
+    footer{margin-top:40px; color:var(--muted); font-size:13px; text-align:center}
   </style>
 </head>
 <body>
-<div id="wrap">
-  <h1>Find your photos</h1>
-  <p>Enter your Photo ID (e.g., <code>CH0928251007</code>) and click Load.</p>
-  <input id="photoId" type="text" placeholder="CH0928251007 or a Cloudinary URL" />
-  <button id="goBtn">Load</button>
-  <div id="msg"></div>
-  <div id="row"></div>
-</div>
+  <div class="wrap">
+    <header>
+      <div class="kicker">MyTouristPhoto</div>
+      <h1>Find your photos</h1>
+      <p class="lede">
+        Enter your <strong>Photo ID</strong> (for example <code>CH0928251007</code>). We’ll find the exact photo and show the one
+        <em>before</em> and <em>after</em> from the same shoot.
+      </p>
+    </header>
 
-<script>
-  // 👉 Your Cloudinary cloud name:
-  const CLOUD = "dvqpndvej";
+    <section class="panel">
+      <div class="steps">
+        <div>1) Type your ID (just the short number like <code>CH0928251007</code>).</div>
+        <div>2) Click <strong>Load</strong>.</div>
+        <div>3) You’ll see your photo plus neighbors from the same folder.</div>
+      </div>
 
-  // --- tiny DOM helpers ---
-  const $ = s => document.querySelector(s);
-  const row = $("#row"), msg = $("#msg");
+      <div class="row">
+        <input id="photoId" type="text" placeholder="Example: CH0928251007" />
+        <button id="goBtn">Load</button>
+      </div>
+      <div class="hint small">Tip: Not case sensitive. IDs may start with CH… or KL…</div>
+      <div id="status" class="status"></div>
+    </section>
 
-  function addCard(url, label){
-    const div = document.createElement("div");
-    div.className = "card";
-    div.innerHTML =
-      `<img src="${url}" style="display:block;width:100%;height:auto" alt="">
-       <div class="cap">${label}</div>`;
-    row.appendChild(div);
-  }
+    <section id="results" class="grid"></section>
 
-  // Build a Cloudinary delivery URL from a public_id
-  const deliveryUrl = pubId => `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
+    <footer>
+      Having trouble? Double-check your ID or try one digit higher/lower.
+    </footer>
+  </div>
 
-  // Load-check via <img> (works cross-origin)
-  function loadImg(url){
-    return new Promise(resolve=>{
-      const img = new Image();
-      img.onload = () => resolve({ok:true,url});
-      img.onerror = () => resolve({ok:false,url});
-      img.src = url;
-    });
-  }
+  <script>
+    // 👉 Replace with your Cloudinary cloud if different
+    const CLOUD = "dvqpndvej";
 
-  // If user pasted a full Cloudinary URL, extract public_id
-  function toPublicId(input){
-    if (/res\.cloudinary\.com/.test(input)){
-      // grab the part after /image/upload/(v123/)? ... until extension
-      const m = input.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
-      return m ? m[1] : input;
-    }
-    return input;
-  }
+    // ----- helpers -----
+    const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-  // Venue from ID prefix (CH... → chiefs-luau, KL... → ka-moana-luau)
-  function venueFromId(id){
-    const p = (id||"").toUpperCase();
-    return p.startsWith("KL") ? "ka-moana-luau" : "chiefs-luau";
-  }
+    const $ = sel => document.querySelector(sel);
+    const resultsEl = $("#results");
+    const statusEl  = $("#status");
 
-  // Format helpers (no libraries)
-  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const pad2 = n => String(n).padStart(2,"0");
-  function dateParts(d){
-    const Y = d.getFullYear();
-    const Mtxt = MONTHS[d.getMonth()];
-    const mdY = `${pad2(d.getMonth()+1)}.${pad2(d.getDate())}.${Y}`;
-    return {Y, Mtxt, mdY};
-  }
+    const deliveryUrl = (publicId) =>
+      `https://res.cloudinary.com/${CLOUD}/image/upload/${publicId}.jpg`;
 
-  // Create candidate public_ids for the last N days (with and without Month folder)
-  function buildCandidatesFor(id, days=60){
-    const venue = venueFromId(id);
-    const out = [];
-    for (let i=0;i<=days;i++){
-      const d = new Date(Date.now() - i*864e5);
-      const {Y,Mtxt,mdY} = dateParts(d);
-      out.push(`${venue}/${Y}/${Mtxt}/${mdY}/${id}`); // with Month folder
-      out.push(`${venue}/${Y}/${mdY}/${id}`);         // without Month folder
-    }
-    return out;
-  }
+    const headOK = (url) =>
+      fetch(url, { method: "HEAD", cache: "no-store" }).then(r => r.ok).catch(() => false);
 
-  // Find first existing public_id by probing delivery URLs (sequentially, small batches)
-  async function findExistingPublicId(id){
-    const cands = buildCandidatesFor(id, 90);
-    const batchSize = 6;
-    for (let i=0;i<cands.length;i+=batchSize){
-      const batch = cands.slice(i,i+batchSize);
-      const results = await Promise.all(batch.map(p => loadImg(deliveryUrl(p))));
-      const idx = results.findIndex(r => r.ok);
-      if (idx !== -1) return batch[idx]; // return first that exists
-    }
-    return null;
-  }
+    const plusMinusOne = (id) => {
+      const digits = (id.match(/(\d+)$/) || [])[1] || "";
+      const prefix = id.slice(0, id.length - digits.length);
+      const n = parseInt(digits || "0", 10);
+      return [`${prefix}${n-1}`, id, `${prefix}${n+1}`];
+    };
 
-  // Increment/decrement ONLY the trailing 3–6 digits, preserve zero padding
-  function bumpTail(id, delta){
-    const m = (id||"").match(/^(.*?)(\d{3,6})$/);
-    if (!m) return null;
-    const [, pre, tail] = m;
-    const width = tail.length;
-    const num = Number(tail) + delta;
-    if (num < 0) return null;
-    return pre + String(num).padStart(width, "0");
-  }
-  const plusMinusOne = id => [bumpTail(id,-1), id, bumpTail(id,1)].filter(Boolean);
+    const venueFromId = (id) =>
+      (id || "").toUpperCase().startsWith("KL") ? "ka-moana-luau" : "chiefs-luau";
 
-  // Click handler: find MAIN → then neighbors from SAME folder
-  $("#goBtn").onclick = async () => {
-    row.innerHTML = "";
-    msg.textContent = "Checking…";
-
-    const raw = $("#photoId").value.trim();
-    if (!raw){ msg.textContent = "Please enter your Photo ID."; return; }
-
-    // Accept: short ID, public_id, or full URL
-    let pubId = toPublicId(raw);
-    let foundPublicId = null;
-
-    if (pubId.includes("/")){
-      // full public_id provided
-      const ok = (await loadImg(deliveryUrl(pubId))).ok;
-      foundPublicId = ok ? pubId : null;
-    } else {
-      // short ID → probe recent dates to find folder
-      foundPublicId = await findExistingPublicId(pubId);
+    // Build candidate public_id paths across recent days (month-in-path FIRST, then no-month)
+    function buildCandidates(id, startDate = new Date()) {
+      const idVariants = [id, (id||"").toUpperCase(), (id||"").toLowerCase()]
+        .filter((v,i,a) => v && a.indexOf(v) === i);
+      const venue = venueFromId(id);
+      const start = new Date(startDate);
+      const out = [];
+      for (let d=0; d<90; d++){
+        const date = new Date(start); date.setDate(start.getDate()-d);
+        const Y = String(date.getFullYear());
+        const Mtxt = MONTHS[date.getMonth()];
+        const mdY = `${String(date.getMonth()+1).padStart(2,"0")}.${String(date.getDate()).padStart(2,"0")}.${Y}`;
+        for (const v of idVariants){
+          out.push(`${venue}/${Y}/${Mtxt}/${mdY}/${v}`); // with Month folder
+          out.push(`${venue}/${Y}/${mdY}/${v}`);        // fallback without Month
+        }
+      }
+      return out;
     }
 
-    if (!foundPublicId){
-      msg.textContent = "Sorry, we couldn’t find that ID.";
-      return;
+    async function findExistingPublicId(id){
+      // Probe delivery URLs (no admin API needed)
+      const candidates = buildCandidates(id);
+      const batchSize = 8;
+      for (let i=0; i<candidates.length; i += batchSize){
+        const batch = candidates.slice(i, i+batchSize);
+        const checks = await Promise.all(batch.map(p => headOK(deliveryUrl(p))));
+        const hitIdx = checks.findIndex(Boolean);
+        if (hitIdx >= 0) return batch[hitIdx];
+      }
+      return null;
     }
 
-    // Show main
-    addCard(deliveryUrl(foundPublicId), foundPublicId);
-
-    // Neighbors from SAME folder
-    const folder = foundPublicId.replace(/\/[^/]+$/, "");
-    const file   = foundPublicId.split("/").pop();
-    const [prev, cur, next] = plusMinusOne(file);
-    const picks = [prev, next].filter(Boolean).map(f => `${folder}/${f}`);
-
-    if (picks.length){
-      const checks = await Promise.all(picks.map(p => loadImg(deliveryUrl(p))));
-      checks.forEach((c,i) => { if (c.ok) addCard(c.url, picks[i]); });
+    function card(publicId, label){
+      const url = deliveryUrl(publicId);
+      const el  = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = `
+        <img class="thumb" loading="lazy" src="${url}" alt="${label || ""}" />
+        <div class="meta">
+          ${label ? `<span class="pill">${label}</span>` : ``}
+          <div class="path" title="${publicId}">${publicId}</div>
+          <div class="actions">
+            <a class="ghost small" href="${url}" target="_blank" rel="noopener">Open original</a>
+          </div>
+        </div>
+      `;
+      return el;
     }
 
-    msg.textContent = ""; // clear
-  };
-</script>
+    async function onLoadClick(){
+      resultsEl.innerHTML = "";
+      const raw = $("#photoId").value.trim();
+      if (!raw){ statusEl.className = "status"; statusEl.textContent = "Please enter your Photo ID."; return; }
+
+      statusEl.className = "status"; statusEl.textContent = "Searching…";
+      const id = raw;
+
+      // 1) Find the main public_id by probing delivery URLs
+      const found = await findExistingPublicId(id);
+      if (!found){
+        statusEl.className = "status err";
+        statusEl.textContent = "Sorry, we couldn’t find that ID in the last 90 days.";
+        return;
+      }
+
+      // 2) Show neighbors from the SAME folder
+      // folder/publicId file
+      const folder = found.replace(/\/[^/]+$/, "");
+      const file   = found.split("/").pop();
+      const [prev, cur, next] = plusMinusOne(file);
+      const neighbors = [
+        { id: `${folder}/${prev}`,  label: "Previous" },
+        { id: `${folder}/${cur}`,   label: "This photo" },
+        { id: `${folder}/${next}`,  label: "Next" },
+      ];
+
+      const checks = await Promise.all(neighbors.map(n => headOK(deliveryUrl(n.id))));
+      const any = checks.some(Boolean);
+      if (!any){
+        // Fallback—at least show the one we found
+        resultsEl.appendChild(card(found, "This photo"));
+        statusEl.className = "status ok";
+        statusEl.textContent = "Found the main photo.";
+        return;
+      }
+
+      // Render (in order prev, current, next—only those that exist)
+      neighbors.forEach((n,i) => { if (checks[i]) resultsEl.appendChild(card(n.id, n.label)); });
+      statusEl.className = "status ok";
+      statusEl.textContent = "Done.";
+    }
+
+    $("#goBtn").addEventListener("click", onLoadClick);
+    $("#photoId").addEventListener("keydown", e => { if (e.key === "Enter") onLoadClick(); });
+  </script>
 </body>
 </html>
