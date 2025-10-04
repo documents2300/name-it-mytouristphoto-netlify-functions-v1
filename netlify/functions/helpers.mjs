@@ -53,21 +53,24 @@ export function candidatePublicIds(photoId, startDateISO) {
 // Find the first existing asset in Cloudinary Admin API
 export async function resolveExistingPublicId(photoId, startDateISO) {
   const candidates = candidatePublicIds(photoId, startDateISO);
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME;
 
+  // Try each candidate by doing a simple HEAD to the public URL (no auth).
   for (const pubId of candidates) {
     try {
-      console.log("TRY:", pubId);
-      // IMPORTANT: your assets are type=upload
-      await cloudinary.api.resource(pubId, { resource_type: "image", type: "upload" });
-      console.log("FOUND:", pubId);
-      return pubId;
+      // Check the exact upload URL you actually use
+      const url = `https://res.cloudinary.com/${cloud}/image/upload/${pubId}.jpg`;
+      console.log("PING:", url);
+
+      const res = await fetch(url, { method: "HEAD" });
+      if (res.ok) {
+        console.log("FOUND (public):", pubId);
+        return pubId;
+      } else {
+        console.warn("MISS (public):", pubId, "http:", res.status);
+      }
     } catch (e) {
-      console.warn(
-        "FAIL:", pubId,
-        "| http:", e?.http_code ?? e?.status ?? e?.statusCode ?? "?",
-        "| msg:", e?.message ?? "(none)"
-      );
-      // keep trying
+      console.warn("ERR (public check):", pubId, "| msg:", e?.message);
     }
   }
 
