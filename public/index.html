@@ -1,65 +1,83 @@
-<script>
-  const CLOUD = "dvqpndvej"; // your Cloudinary cloud name
-  const row = document.getElementById("row");
-  const msg = document.getElementById("msg");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MyTouristPhoto</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 20px; }
+    #row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+    .card { width: 320px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+    .card img { display: block; width: 100%; height: auto; }
+    .card div { padding: 6px 8px; font: 14px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  </style>
+</head>
+<body>
+  <h2>Find your photos</h2>
+  <p>Enter your Photo ID (e.g. <code>CH0928251007</code>) and click Load.</p>
+  <input id="inp" style="width:400px" />
+  <button id="goBtn">Load</button>
+  <div id="msg" style="margin-top:8px;color:#888"></div>
+  <div id="row"></div>
 
-  function deliveryUrl(pubId) {
-    return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
-  }
+  <script>
+    const CLOUD = "dvqpndvej"; // 👈 your Cloudinary cloud
 
-  function plusMinusOne(id) {
-    const digits = (id.match(/(\d+)$/) || [])[1] || "";
-    const prefix = id.slice(0, id.length - digits.length);
-    const n = parseInt(digits || "0", 10);
-    return [`${prefix}${n - 1}`, id, `${prefix}${n + 1}`];
-  }
+    function deliveryUrl(pubId) {
+      return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
+    }
 
-  async function loadImg(url) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve({ ok: true, url });
-      img.onerror = () => resolve({ ok: false, url });
-      img.src = url;
-    });
-  }
+    function plusMinusOne(id) {
+      const digits = (id.match(/(\d+)$/) || [])[1] || "";
+      const prefix = id.slice(0, id.length - digits.length);
+      const n = parseInt(digits || "0", 10);
+      return [`${prefix}${n - 1}`, id, `${prefix}${n + 1}`];
+    }
 
-  function addCard(url) {
-    const card = document.createElement("div");
-    card.style.width = "320px";
-    card.style.border = "1px solid #ddd";
-    card.style.borderRadius = "8px";
-    card.style.overflow = "hidden";
-    card.innerHTML = `
-      <img src="${url}" style="display:block;width:100%;height:auto" />
-      <div style="padding:6px 8px;font:14px system-ui, sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-        ${url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}
-      </div>`;
-    row.appendChild(card);
-  }
+    function loadImg(url) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ ok: true, url });
+        img.onerror = () => resolve({ ok: false, url });
+        img.src = url;
+      });
+    }
 
-  document.getElementById("goBtn").onclick = async () => {
-    row.innerHTML = "";
-    msg.textContent = "Checking…";
+    function addCard(url) {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <img src="${url}" />
+        <div>${url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}</div>`;
+      document.getElementById("row").appendChild(card);
+    }
 
-    const input = document.getElementById("inp").value.trim();
-    if (!input) return;
+    document.getElementById("goBtn").onclick = async () => {
+      const row = document.getElementById("row");
+      const msg = document.getElementById("msg");
+      row.innerHTML = "";
+      msg.textContent = "Checking…";
 
-    // Split folder + filename
-    const folder = input.replace(/\/[^/]+$/, "");
-    const file = input.split("/").pop();
-    const [prev, cur, next] = plusMinusOne(file);
+      const raw = document.getElementById("inp").value.trim();
+      if (!raw) return;
 
-    // Build neighbors in SAME folder
-    const candidates = [
-      `${folder}/${prev}`,
-      `${folder}/${cur}`,
-      `${folder}/${next}`,
-    ];
+      // Split folder + filename
+      const folder = raw.replace(/\/[^/]+$/, "");
+      const file = raw.split("/").pop();
+      const [prev, cur, next] = plusMinusOne(file);
 
-    const checks = await Promise.all(candidates.map(p => loadImg(deliveryUrl(p))));
-    const found = checks.filter(c => c.ok);
+      // Neighbors in SAME folder
+      const candidates = [
+        `${folder}/${prev}`,
+        `${folder}/${cur}`,
+        `${folder}/${next}`,
+      ];
 
-    msg.textContent = found.length ? "" : "None of the 3 images existed.";
-    found.forEach(c => addCard(c.url));
-  };
-</script>
+      const checks = await Promise.all(candidates.map(p => loadImg(deliveryUrl(p))));
+      const found = checks.filter(c => c.ok);
+
+      msg.textContent = found.length ? "" : "None of the 3 images existed.";
+      found.forEach(c => addCard(c.url));
+    };
+  </script>
+</body>
+</html>
