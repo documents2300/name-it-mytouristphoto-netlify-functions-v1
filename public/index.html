@@ -1,113 +1,167 @@
-<script>
-  const CLOUD = "dvqpndvej"; // your Cloudinary cloud
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MyTouristPhoto Finder</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0e1014;
+      color: #fff;
+      margin: 0;
+      padding: 40px;
+      text-align: center;
+    }
+    h1 {
+      color: #7ef9a7;
+      font-size: 32px;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    p, li {
+      color: #aaa;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    input {
+      padding: 10px 14px;
+      width: 320px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #444;
+      margin-top: 8px;
+    }
+    button {
+      background-color: #5ef58b;
+      border: none;
+      border-radius: 8px;
+      color: #000;
+      font-weight: 600;
+      padding: 10px 16px;
+      margin-left: 6px;
+      cursor: pointer;
+    }
+    button:hover { background-color: #81ffaa; }
+    #msg {
+      color: #aaa;
+      margin-top: 10px;
+      font-size: 15px;
+    }
+    #row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .card {
+      background: #1a1d23;
+      border: 1px solid #333;
+      border-radius: 10px;
+      width: 280px;
+      overflow: hidden;
+    }
+    .card img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .cap {
+      padding: 6px;
+      font-size: 13px;
+      color: #ccc;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    footer {
+      color: #888;
+      font-size: 13px;
+      margin-top: 40px;
+    }
+  </style>
+</head>
 
-  // --- tiny helpers ---
-  const $ = (s) => document.querySelector(s);
-  const row = $("#row");
-  const msg = $("#msg");
+<body>
+  <h1>Find your photos</h1>
+  <p>Enter your <strong>Photo ID</strong> (for example <code>CH0928251007</code>) and click Load.</p>
+  <input id="photoId" placeholder="Photo ID" />
+  <button id="goBtn">Load</button>
+  <div id="msg"></div>
+  <div id="row"></div>
 
-  const deliveryUrl = (publicId) =>
-    `https://res.cloudinary.com/${CLOUD}/image/upload/${publicId}.jpg`;
+  <footer>
+    Having trouble? Contact us at <strong>info@mytouristphoto.com</strong><br>
+    © 2025 MyTouristPhoto.com
+  </footer>
 
-  const headOK = (url) =>
-    fetch(url, { method: "HEAD" }).then(r => r.ok).catch(() => false);
+  <script>
+    const CLOUD = "dvqpndvej";
 
-  const addCard = (url, label) => {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-      <img src="${url}" alt="" />
-      <div class="cap">${label || url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}</div>
-      <a class="open" href="${url}" target="_blank" rel="noopener">Open original</a>
-    `;
-    row.appendChild(card);
-  };
+    const $ = s => document.querySelector(s);
+    const msg = $("#msg");
+    const row = $("#row");
 
-  // Find the main photo by probing recent dates (same logic you had before)
-  async function findExistingPublicId(shortId) {
-    // Try both casings
-    const ids = [shortId, (shortId||"").toUpperCase(), (shortId||"").toLowerCase()]
-      .filter((v,i,a)=>v && a.indexOf(v)===i);
+    const deliveryUrl = id => `https://res.cloudinary.com/${CLOUD}/image/upload/${id}.jpg`;
 
-    // We only look in the two venues you use
-    const venues = ["chiefs-luau","ka-moana-luau"];
-    // Look back ~90 days; favor Month-in-path FIRST, then without
-    const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    const start = new Date();
-    for (let d=0; d<90; d++){
-      const dt = new Date(start); dt.setDate(start.getDate()-d);
-      const Y = dt.getFullYear();
-      const Mtxt = MONTHS[dt.getMonth()];
-      const mdY = ("0"+(dt.getMonth()+1)).slice(-2)+"."+("0"+dt.getDate()).slice(-2)+"."+Y;
-      for (const v of venues){
-        for (const id of ids){
-          const withMonth = `${v}/${Y}/${Mtxt}/${mdY}/${id}`;
+    const headOK = url => fetch(url, { method: "HEAD" }).then(r => r.ok).catch(() => false);
+
+    const addCard = (url, label) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <img src="${url}" alt="">
+        <div class="cap">${label}</div>`;
+      row.appendChild(card);
+    };
+
+    function plusMinusOne(id) {
+      const digits = (id.match(/(\\d+)$/)||[])[1]||"";
+      const prefix = id.slice(0, id.length - digits.length);
+      const n = parseInt(digits||"0", 10);
+      return [`${prefix}${n-1}`, id, `${prefix}${n+1}`];
+    }
+
+    async function findExistingPublicId(shortId) {
+      const venues = ["chiefs-luau","ka-moana-luau"];
+      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      const start = new Date();
+      for (let d=0; d<90; d++) {
+        const dt = new Date(start); dt.setDate(start.getDate()-d);
+        const Y = dt.getFullYear();
+        const Mtxt = months[dt.getMonth()];
+        const mdY = ("0"+(dt.getMonth()+1)).slice(-2)+"."+("0"+dt.getDate()).slice(-2)+"."+Y;
+        for (const v of venues) {
+          const withMonth = `${v}/${Y}/${Mtxt}/${mdY}/${shortId}`;
           if (await headOK(deliveryUrl(withMonth))) return withMonth;
-          const noMonth = `${v}/${Y}/${mdY}/${id}`;
+          const noMonth = `${v}/${Y}/${mdY}/${shortId}`;
           if (await headOK(deliveryUrl(noMonth))) return noMonth;
         }
       }
-    }
-    return null;
-  }
-
-  function plusMinusOne(file){
-    const digits = (file.match(/(\d+)$/)||[])[1]||"";
-    const prefix = file.slice(0, file.length - digits.length);
-    const n = parseInt(digits||"0", 10);
-    return { prev: `${prefix}${n-1}`, next: `${prefix}${n+1}` };
-  }
-
-  $("#goBtn").onclick = async () => {
-    row.innerHTML = "";
-    msg.textContent = "";
-    const raw = ($("#photoId").value||"").trim();
-    if (!raw){ msg.textContent = "Please enter your Photo ID."; return; }
-
-    // Accept either a short ID (CH0928251007) or a full public_id path
-    const isPublicIdPath = raw.includes("/");
-    let publicId = null;
-
-    if (isPublicIdPath) {
-      // If user pasted a full path, verify it exists
-      const url = deliveryUrl(raw);
-      if (await headOK(url)) publicId = raw;
-    } else {
-      // Short ID: probe to find the real foldered public_id
-      msg.textContent = "Searching across recent dates…";
-      publicId = await findExistingPublicId(raw);
+      return null;
     }
 
-    if (!publicId){
-      msg.textContent = "Sorry, we couldn’t find that ID in the last 90 days.";
-      return;
-    }
+    $("#goBtn").onclick = async () => {
+      row.innerHTML = "";
+      msg.textContent = "";
+      const raw = ($("#photoId").value||"").trim();
+      if (!raw){ msg.textContent = "Please enter your Photo ID."; return; }
 
-    // 1) Show the main photo
-    const mainUrl = deliveryUrl(publicId);
-    addCard(mainUrl, "This photo");
+      msg.textContent = "Searching...";
+      const publicId = await findExistingPublicId(raw);
+      if (!publicId){ msg.textContent = "No image found."; return; }
 
-    // 2) Neighbors from the SAME folder as the main
-    const folder = publicId.replace(/\/[^/]+$/, "");
-    const file   = publicId.split("/").pop();
-    const { prev, next } = plusMinusOne(file);
+      const folder = publicId.replace(/\\/[^/]+$/, "");
+      const file = publicId.split("/").pop();
+      const [prev, cur, next] = plusMinusOne(file);
+      const candidates = [`${folder}/${prev}`, `${folder}/${cur}`, `${folder}/${next}`];
 
-    // Try both “month-in-path” and “no-month” variants for neighbors,
-    // in case your uploads mix styles between days.
-    const monthMatcher = /\/(January|February|March|April|May|June|July|August|September|October|November|December)\//;
-    const hasMonth = monthMatcher.test(folder);
-    const folderNoMonth = hasMonth ? folder.replace(/\/(January|February|March|April|May|June|July|August|September|October|November|December)\/[^/]+/, "") : folder;
-
-    const neighborPublicIds = [
-      `${folder}/${prev}`,
-      `${folder}/${next}`,
-      `${folderNoMonth}/${prev}`,
-      `${folderNoMonth}/${next}`,
-    ].filter((v,i,a)=>a.indexOf(v)===i);
-
-    const checks = await Promise.all(neighborPublicIds.map(pid => headOK(deliveryUrl(pid)).then(ok => ({ok, pid}))));
-    checks.filter(c=>c.ok).forEach(c => addCard(deliveryUrl(c.pid)));
-
-    msg.textContent = "Done.";
-  };
-</script>
+      const checks = await Promise.all(candidates.map(p => headOK(deliveryUrl(p)).then(ok => ({ok, p}))));
+      const found = checks.filter(c=>c.ok);
+      found.forEach(c => addCard(deliveryUrl(c.p), c.p));
+      msg.textContent = found.length ? "Done." : "None found.";
+    };
+  </script>
+</body>
+</html>
