@@ -1,47 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Find your photos</title>
-  <style>
-    :root{--bg:#0b1220;--panel:#121a2a;--muted:#8aa0c5;--text:#e6eefc;--brand:#7fe48c;}
-    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:16px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif}
-    .wrap{max-width:980px;margin:48px auto;padding:0 16px}
-    h1{font-size:28px;margin:0 0 16px}
-    .panel{background:var(--panel);border-radius:12px;padding:16px 16px 10px;border:1px solid #1b2740}
-    label{display:block;margin-bottom:8px;color:var(--muted)}
-    .row{display:flex;gap:8px;align-items:center}
-    input[type=text]{flex:1;min-width:280px;background:#0e1526;border:1px solid #24314d;border-radius:8px;color:var(--text);padding:10px 12px}
-    button{background:var(--brand);border:0;color:#0c2712;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer}
-    #msg{min-height:22px;color:var(--muted);margin-top:8px}
-    .grid{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-    .card{background:#0e1526;border:1px solid #24314d;border-radius:10px;overflow:hidden}
-    .cap{padding:10px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#a9b9db}
-    .cap b{color:#e6eefc}
-    .thumb{display:block;width:100%;height:auto;background:#0b1220}
-    a.small{display:inline-block;margin:8px 0 0 12px;color:#9ed0ff;text-decoration:none;font-size:13px}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <h1>Find your photos</h1>
-    <div class="panel">
-      <label>Enter your Photo ID (for example <b>CH0928251007</b>) and click Load.</label>
-      <div class="row">
-        <input id="photoId" type="text" placeholder="CH0928251007" />
-        <button id="goBtn">Load</button>
-      </div>
-      <div id="msg"></div>
-    </div>
-
-    <div id="grid" class="grid"></div>
-  </div>
-
-  <script>
+<script>
   // ===== CONFIG =====
   const CLOUD = "dvqpndvej";                 // your Cloudinary cloud
-  const VENUES = ["chiefs-luau","ka-moana-luau"]; // we’ll auto-pick by ID prefix
   const LOOKBACK_DAYS = 120;
 
   // ===== small helpers =====
@@ -51,31 +10,29 @@
 
   function venueFromId(id) {
     const p = String(id || "").toUpperCase();
-    // KL... → ka-moana-luau, else chiefs
     return p.startsWith("KL") ? "ka-moana-luau" : "chiefs-luau";
   }
 
-  function deliveryUrl(pubId){ 
+  function deliveryUrl(pubId){
     return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
   }
-  function rawUrl(folder){ 
+  function rawUrl(folder){
     return `https://res.cloudinary.com/${CLOUD}/raw/upload/${folder}/index.txt`;
   }
 
   function plusMinusOne(id){
-    const digits = (String(id).match(/(\\d+)$/)||[])[1]||"";
+    const digits = (String(id).match(/(\d+)$/) || [])[1] || "";
     const prefix = String(id).slice(0, id.length - digits.length);
-    const n = parseInt(digits||"0",10);
+    const n = parseInt(digits || "0", 10);
     return [`${prefix}${n-1}`, id, `${prefix}${n+1}`];
   }
 
   async function imgExists(pubId){
-    // Use <img> probe (no CORS/HEAD headaches)
     const url = deliveryUrl(pubId);
     return new Promise(resolve=>{
       const img = new Image();
-      img.onload = () => resolve({ok:true, url, pubId});
-      img.onerror = () => resolve({ok:false, url, pubId});
+      img.onload  = () => resolve({ ok:true,  url, pubId });
+      img.onerror = () => resolve({ ok:false, url, pubId });
       img.src = url;
     });
   }
@@ -91,29 +48,26 @@
     grid.appendChild(el);
   }
 
-  // Build candidate public_id paths to find the MAIN photo quickly.
   function* recentCandidates(shortId, startDate = new Date()){
     const venue = venueFromId(shortId);
     const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     for(let d=0; d<LOOKBACK_DAYS; d++){
-      const dt = new Date(startDate.getTime() - d*864e5);
-      const Y  = dt.getUTCFullYear();
-      const Mtxt = months[dt.getUTCMonth()];
-      const mdY  = String(dt.getUTCMonth()+1).padStart(2,"0")+"."+String(dt.getUTCDate()).padStart(2,"0")+"."+dt.getUTCFullYear();
-      // Month-in-path (your newer style)
-      yield `${venue}/${Y}/${Mtxt}/${mdY}/${shortId}`;
-      // No-month (older style)
-      yield `${venue}/${Y}/${mdY}/${shortId}`;
+      const dt  = new Date(startDate.getTime() - d*864e5);
+      const Y   = dt.getUTCFullYear();
+      const M   = months[dt.getUTCMonth()];
+      const mdY = String(dt.getUTCMonth()+1).padStart(2,"0")+"."+String(dt.getUTCDate()).padStart(2,"0")+"."+dt.getUTCFullYear();
+      yield `${venue}/${Y}/${M}/${mdY}/${shortId}`; // month-in-path
+      yield `${venue}/${Y}/${mdY}/${shortId}`;      // no-month
     }
   }
 
   async function findMainPublicId(shortOrPath){
-    // Accept a full Cloudinary URL too
-    if (/res\\.cloudinary\\.com/.test(shortOrPath)){
-      const m = shortOrPath.match(/\\/image\\/upload\\/(?:v\\d+\\/)?(.+?)(?:\\.\\w+)?$/);
+    // If they pasted a full Cloudinary URL, strip to public_id
+    if (/res\.cloudinary\.com/.test(shortOrPath)){
+      const m = shortOrPath.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
       if (m) return m[1];
     }
-    // If the user pasted a full folder path like chiefs-luau/.../ID, keep as-is
+    // If they pasted a full folder path, keep it
     if (shortOrPath.includes("/")) return shortOrPath.trim();
 
     const shortId = shortOrPath.trim();
@@ -125,16 +79,15 @@
   }
 
   async function fetchNeighborsFromIndex(foundPubId){
-    // foundPubId contains: <venue>/<YYYY>/<Month?>/<MM.DD.YYYY>/<ID>
-    const folder = foundPubId.replace(/\\/[^/]+$/, "");   // drop filename
+    const folder = foundPubId.replace(/\/[^/]+$/, "");   // drop filename
     const file   = foundPubId.split("/").pop();
     const url    = rawUrl(folder);
 
     try{
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) return null;
-      const txt = await res.text();
-      const names = txt.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean);
+      const txt   = await res.text();
+      const names = txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
       const i = names.indexOf(file);
       if (i === -1) return null;
 
@@ -159,43 +112,36 @@
       return;
     }
 
-    // Prefer index.txt neighbors (correct order, no guessing)
+    // Prefer index.txt (exact ordering). Fallback to +/- 1.
     let pubIds = await fetchNeighborsFromIndex(mainPubId);
-
-    // Fallback: +/- 1 by number if index.txt missing
     if (!pubIds){
-      const folder = mainPubId.replace(/\\/[^/]+$/, "");
+      const folder = mainPubId.replace(/\/[^/]+$/, "");
       const file   = mainPubId.split("/").pop();
       const [prev, cur, next] = plusMinusOne(file);
       pubIds = [`${folder}/${prev}`, `${folder}/${cur}`, `${folder}/${next}`];
     }
 
-    // Probe and render in order
     const checks = await Promise.all(pubIds.map(pid => imgExists(pid)));
     const ok = checks.filter(c=>c.ok);
 
-    // Label cards
     if (ok.length){
-      const namesOnly = ok.map(c => c.pubId.split("/").pop());
-      const centerIdx = namesOnly.indexOf(mainPubId.split("/").pop());
-      ok.forEach((c, idx) => {
+      const centerName = mainPubId.split("/").pop();
+      ok.forEach(c => {
+        const name = c.pubId.split("/").pop();
         let label = "This photo";
-        if (idx < centerIdx) label = "Previous";
-        if (idx > centerIdx) label = "Next";
+        if (name < centerName) label = "Previous";
+        if (name > centerName) label = "Next";
         addCard(c.url, `<b>${label}</b> · ${c.pubId}`);
       });
       msg.textContent = "Done.";
     }else{
-      msg.textContent = "We found the folder, but none of the neighbors rendered.";
+      msg.textContent = "We found the folder, but neighbors didn’t render.";
     }
   }
 
-  // Wire the button
   $("#goBtn").onclick = () => {
     const raw = $("#photoId").value.trim();
     if (!raw){ msg.textContent = "Please enter a Photo ID."; return; }
     show(raw);
   };
-  </script>
-</body>
-</html>
+</script>
