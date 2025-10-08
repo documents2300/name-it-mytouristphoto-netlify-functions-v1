@@ -1,160 +1,219 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MyTouristPhoto Finder</title>
+  <meta charset="utf-8" />
+  <title>Find Your Photos | MyTouristPhoto</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background-color: #0e1014;
-      color: #fff;
       margin: 0;
-      padding: 40px;
-      text-align: center;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #0b1220;
+      color: #e6e8f0;
+    }
+    .wrap {
+      max-width: 900px;
+      margin: 50px auto;
+      padding: 0 16px;
     }
     h1 {
-      color: #7ef9a7;
-      font-size: 32px;
-      letter-spacing: 0.5px;
-      margin-bottom: 12px;
+      font-size: 28px;
+      margin-bottom: 10px;
+      color: #22c55e;
     }
-    p {
-      color: #aaa;
-      font-size: 16px;
-      line-height: 1.5;
+    .panel {
+      background: #0f172a;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 16px 20px;
     }
-    input {
-      padding: 10px 14px;
-      width: 320px;
-      font-size: 16px;
+    input[type=text] {
+      width: 360px;
+      padding: 10px;
       border-radius: 8px;
-      border: 1px solid #444;
-      margin-top: 8px;
-    }
-    button {
-      background-color: #5ef58b;
-      border: none;
-      border-radius: 8px;
-      color: #000;
-      font-weight: 600;
-      padding: 10px 16px;
-      margin-left: 6px;
-      cursor: pointer;
-    }
-    button:hover { background-color: #81ffaa; }
-    #msg {
-      color: #aaa;
-      margin-top: 10px;
+      border: 1px solid #1f2937;
+      background: #0b1220;
+      color: #e6e8f0;
       font-size: 15px;
     }
-    #row {
+    button {
+      padding: 10px 16px;
+      border: 0;
+      border-radius: 8px;
+      background: #22c55e;
+      color: #052e14;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    .tip {
+      color: #94a3b8;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .row {
       display: flex;
       flex-wrap: wrap;
-      justify-content: center;
-      gap: 16px;
+      gap: 14px;
       margin-top: 20px;
     }
     .card {
-      background: #1a1d23;
-      border: 1px solid #333;
-      border-radius: 10px;
-      width: 280px;
+      width: 300px;
+      background: #0f172a;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
       overflow: hidden;
     }
     .card img {
+      display: block;
       width: 100%;
       height: auto;
-      display: block;
     }
     .cap {
-      padding: 6px;
+      padding: 6px 10px;
       font-size: 13px;
-      color: #ccc;
+      color: #9fb0c3;
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
     }
     footer {
-      color: #888;
+      margin-top: 60px;
       font-size: 13px;
-      margin-top: 40px;
+      color: #64748b;
+      text-align: center;
     }
+    .ok { color: #22c55e; }
+    .err { color: #ef4444; }
   </style>
 </head>
 
 <body>
-  <h1>Find your photos</h1>
-  <p>Enter your <strong>Photo ID</strong> (for example <code>CH0928251007</code>) and click Load.</p>
-  <input id="photoId" placeholder="Photo ID" />
-  <button id="goBtn">Load</button>
-  <div id="msg"></div>
-  <div id="row"></div>
+  <div class="wrap">
+    <h1>Find your photos</h1>
 
-  <footer>
-    Having trouble? Contact us at <strong>info@mytouristphoto.com</strong><br>
-    © 2025 MyTouristPhoto.com
-  </footer>
+    <div class="panel">
+      <p>Enter your <strong>Photo ID</strong> (for example <code>CH0928251007</code>) and click <strong>Load</strong>.</p>
+      <ol class="tip" style="margin-left:20px">
+        <li>Type your ID number (e.g. <code>CH0928251007</code>).</li>
+        <li>Click Load.</li>
+        <li>Your photo will appear with the ones taken right before and after it.</li>
+      </ol>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+        <input id="photoId" type="text" placeholder="CH0928251007" />
+        <button id="goBtn">Load</button>
+      </div>
+      <div id="msg" class="tip" style="margin-top:8px;"></div>
+    </div>
 
-  <script>
-    const CLOUD = "dvqpndvej";
-    const $ = s => document.querySelector(s);
-    const msg = $("#msg");
-    const row = $("#row");
+    <div id="row" class="row"></div>
 
-    const deliveryUrl = id => `https://res.cloudinary.com/${CLOUD}/image/upload/${id}.jpg`;
+    <footer>
+      Having trouble? Contact us at 
+      <a href="mailto:info@mytouristphoto.com" style="color:#22c55e;">info@mytouristphoto.com</a><br>
+      &copy; 2025 MyTouristPhoto. All rights reserved.
+    </footer>
+  </div>
 
-    const headOK = url => fetch(url, { method: "HEAD" }).then(r => r.ok).catch(() => false);
+<script>
+const CLOUD = "dvqpndvej"; // your Cloudinary cloud name
+const row = document.getElementById("row");
+const msg = document.getElementById("msg");
+const $  = s => document.querySelector(s);
 
-    const addCard = (url, label) => {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `<img src="${url}" alt=""><div class="cap">${label}</div>`;
-      row.appendChild(card);
-    };
+const imgUrl = (publicId) => `https://res.cloudinary.com/${CLOUD}/image/upload/${publicId}.jpg`;
 
-    function plusMinusOne(id) {
-      const digits = (id.match(/(\\d+)$/) || [])[1] || "";
-      const prefix = id.slice(0, id.length - digits.length);
-      const n = parseInt(digits || "0", 10);
-      return [`${prefix}${n-1}`, id, `${prefix}${n+1}`];
-    }
+async function headOK(url) {
+  try {
+    const res = await fetch(url, { method: "HEAD" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
-    async function findExistingPublicId(shortId) {
-      const venues = ["chiefs-luau"];
-      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-      const start = new Date();
-      for (let d = 0; d < 90; d++) {
-        const dt = new Date(start); dt.setDate(start.getDate() - d);
-        const Y = dt.getFullYear();
-        const Mtxt = months[dt.getMonth()];
-        const mdY = ("0" + (dt.getMonth() + 1)).slice(-2) + "." + ("0" + dt.getDate()).slice(-2) + "." + Y;
-        const withMonth = `${venues[0]}/${Y}/${Mtxt}/${mdY}/${shortId}`;
-        if (await headOK(deliveryUrl(withMonth))) return withMonth;
-      }
-      return null;
-    }
+function addCard(publicId, label) {
+  const d = document.createElement("div");
+  d.className = "card";
+  d.innerHTML = `
+    <img src="${imgUrl(publicId)}" alt="">
+    <div class="cap"><strong>${label}</strong></div>
+    <div class="cap">${publicId}</div>`;
+  row.appendChild(d);
+}
 
-    $("#goBtn").onclick = async () => {
-      row.innerHTML = "";
-      msg.textContent = "";
-      const raw = ($("#photoId").value || "").trim();
-      if (!raw) { msg.textContent = "Please enter your Photo ID."; return; }
+function buildCandidates(shortId) {
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const start = new Date();
+  const out = [];
+  for (let d = 0; d < 120; d++) {
+    const dt = new Date(start); dt.setDate(dt.getDate() - d);
+    const Y = dt.getFullYear();
+    const m = String(dt.getMonth()+1).padStart(2,"0");
+    const M = months[dt.getMonth()];
+    const day = String(dt.getDate()).padStart(2,"0");
+    const mdY = `${m}.${day}.${Y}`;
+    out.push(`chiefs-luau/${Y}/${M}/${mdY}/${shortId}`);
+    out.push(`chiefs-luau/${Y}/${mdY}/${shortId}`);
+    out.push(`ka-moana-luau/${Y}/${M}/${mdY}/${shortId}`);
+    out.push(`ka-moana-luau/${Y}/${mdY}/${shortId}`);
+  }
+  return [...new Set(out)];
+}
 
-      msg.textContent = "Searching...";
-      const publicId = await findExistingPublicId(raw);
-      if (!publicId) { msg.textContent = "No image found."; return; }
+async function findMainPublicId(shortOrPath) {
+  if (shortOrPath.includes("/")) {
+    const direct = shortOrPath.replace(/\.jpg$/i, "");
+    if (await headOK(imgUrl(direct))) return direct;
+  }
+  const cand = buildCandidates(shortOrPath.trim());
+  for (const p of cand) {
+    if (await headOK(imgUrl(p))) return p;
+  }
+  return null;
+}
 
-      const folder = publicId.replace(/\\/[^/]+$/, "");
-      const file = publicId.split("/").pop();
-      const [prev, cur, next] = plusMinusOne(file);
-      const candidates = [`${folder}/${prev}`, `${folder}/${cur}`, `${folder}/${next}`];
+async function neighborsViaIndex(foundPublicId) {
+  const folder = foundPublicId.replace(/\/[^/]+$/, "");
+  const file   = foundPublicId.split("/").pop();
+  const indexUrl = `https://res.cloudinary.com/${CLOUD}/raw/upload/${folder}/index.txt`;
 
-      const checks = await Promise.all(candidates.map(p => headOK(deliveryUrl(p)).then(ok => ({ ok, p }))));
-      const found = checks.filter(c => c.ok);
-      found.forEach(c => addCard(deliveryUrl(c.p), c.p));
-      msg.textContent = found.length ? "Done." : "None found.";
-    };
-  </script>
+  let text = "";
+  try {
+    const res = await fetch(indexUrl, { cache: "no-store" });
+    if (res.ok) text = await res.text();
+  } catch {}
+
+  if (!text) {
+    msg.innerHTML = `<span class="err">index.txt not found in ${folder}</span>`;
+    return [foundPublicId];
+  }
+
+  const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const i = names.indexOf(file);
+  if (i === -1) return [foundPublicId];
+
+  const picks = [names[i-1], names[i], names[i+1]].filter(Boolean).map(n => `${folder}/${n}`);
+  const checks = await Promise.all(picks.map(p => headOK(imgUrl(p)).then(ok => ok ? p : null)));
+  return checks.filter(Boolean);
+}
+
+document.getElementById("goBtn").onclick = async () => {
+  row.innerHTML = "";
+  msg.textContent = "Searching...";
+  const input = $("#photoId").value.trim();
+  if (!input) { msg.textContent = "Please enter a Photo ID."; return; }
+
+  const found = await findMainPublicId(input);
+  if (!found) { msg.innerHTML = '<span class="err">Sorry, we couldn’t find that ID recently.</span>'; return; }
+
+  const picks = await neighborsViaIndex(found);
+  picks.forEach((p, idx) => addCard(p, idx === 1 ? "This photo" : (idx === 0 ? "Previous" : "Next")));
+  msg.innerHTML = '<span class="ok">Done.</span>';
+};
+</script>
 </body>
 </html>
