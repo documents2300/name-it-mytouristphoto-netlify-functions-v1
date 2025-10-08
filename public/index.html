@@ -1,189 +1,129 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Find your photos</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root { --bg:#0f172a; --panel:#111827; --txt:#e5e7eb; --mut:#9ca3af; --brand:#22c55e; --cap:#1f2937; }
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif}
-    .wrap{max-width:980px;margin:40px auto;padding:0 16px}
-    h1{font-size:32px;margin:0 0 6px} .lead{color:var(--mut);margin:0 0 24px}
-    .panel{background:var(--panel);border:1px solid #1f2937;border-radius:12px;padding:18px 16px;margin:18px 0}
-    .row{display:flex;gap:10px;align-items:center}
-    input[type=text]{flex:1;min-width:260px;background:#0b1220;border:1px solid #223049;border-radius:10px;
-      padding:10px 12px;color:var(--txt);outline:none}
-    button{background:var(--brand);border:0;border-radius:10px;color:#052e16;padding:10px 18px;font-weight:600;cursor:pointer}
-    #msg{color:var(--mut);margin:10px 2px 0}
-    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:18px}
-    .card{background:#0b1220;border:1px solid #223049;border-radius:12px;overflow:hidden}
-    .thumb{display:block;width:100%;height:auto}
-    .cap{padding:10px 12px;background:var(--cap);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .small{display:inline-block;padding:10px 12px;color:#93c5fd;text-decoration:none}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <h1>Find your photos</h1>
-    <p class="lead">Enter your Photo ID (for example <b>CH0928251007</b>) and click Load.</p>
+<script>
+// ------- config -------
+const CLOUD = "dvqpndvej";          // your Cloudinary cloud
+const VENUES = ["chiefs-luau","ka-moana-luau"];
+const MONTHS = ["January","February","March","April","May","June","July","August",
+                "September","October","November","December"];
 
-    <div class="panel">
-      <div class="row">
-        <input id="photoId" type="text" placeholder="CH0928251007" />
-        <button id="goBtn">Load</button>
-      </div>
-      <div id="msg"></div>
-    </div>
+// ------- tiny DOM helpers -------
+const $  = s => document.querySelector(s);
+const msg = $("#msg") || { textContent: "" };
+const grid = $("#grid") || (function(){ const d=document.createElement("div"); d.id="grid"; document.body.appendChild(d); return d; })();
 
-    <div id="grid"></div>
-  </div>
+function addCard(url, label="") {
+  const card = document.createElement("div");
+  card.style.cssText = "width:320px;border:1px solid #1e293b;border-radius:10px;overflow:hidden;background:#0b1220";
+  card.innerHTML = `
+    <img src="${url}" style="display:block;width:100%;height:auto" />
+    <div style="padding:8px 10px;color:#cbd5e1;font:14px system-ui, sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+      ${label}
+    </div>`;
+  grid.appendChild(card);
+}
 
-  <script>
-    // ===== CONFIG =====
-    const CLOUD = "dvqpndvej";                 // your Cloudinary cloud
-    const LOOKBACK_DAYS = 120;
+function loadImg(url){  // no HEAD/CORS—just let <img> tell us
+  return new Promise(res => {
+    const i = new Image();
+    i.onload  = () => res({ok:true, url});
+    i.onerror = () => res({ok:false, url});
+    i.src = url;
+  });
+}
 
-    // ===== small helpers =====
-    const $ = s => document.querySelector(s);
-    const msg = $("#msg");
-    const grid = $("#grid");
+// Turn whatever the user typed into a photo id or url
+function normalizeInput(raw) {
+  const s = (raw||"").trim();
+  if (!s) return { kind:"empty" };
+  if (/res\.cloudinary\.com/.test(s)) return { kind:"fullUrl", url:s };
+  return { kind:"shortId", id:s };
+}
 
-    function venueFromId(id) {
-      const p = String(id || "").toUpperCase();
-      return p.startsWith("KL") ? "ka-moana-luau" : "chiefs-luau";
+function publicIdFromUrl(fullUrl){
+  const m = fullUrl.match(/\/image\/upload\/(?:v\d+\/)?(.+?)\.\w+$/);
+  return m ? m[1] : null;
+}
+
+function neighborsOf(id){
+  const digits = (id.match(/(\d+)$/)||[])[1] || "";
+  const prefix = id.slice(0, id.length - digits.length);
+  const n = parseInt(digits||"0",10);
+  return [`${prefix}${n-1}`, `${prefix}${n}`, `${prefix}${n+1}`];
+}
+
+function deliveryUrl(pubId){ return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`; }
+
+// Probe recent dates to find the folder of the main image
+async function findMainUrlById(shortId, daysBack=90){
+  const today = new Date();
+  for (let d=0; d<=daysBack; d++){
+    const dt = new Date(today.getTime() - d*86400000);
+    const Y = dt.getFullYear();
+    const Mtxt = MONTHS[dt.getMonth()];
+    const mdY = String(dt.getMonth()+1).padStart(2,"0")+"."+String(dt.getDate()).padStart(2,"0")+"."+Y;
+
+    for (const v of VENUES){
+      // try month-in-path
+      const p1 = `${v}/${Y}/${Mtxt}/${mdY}/${shortId}`;
+      const u1 = deliveryUrl(p1);
+      if ((await loadImg(u1)).ok) return u1;
+
+      // try no-month
+      const p2 = `${v}/${Y}/${mdY}/${shortId}`;
+      const u2 = deliveryUrl(p2);
+      if ((await loadImg(u2)).ok) return u2;
+    }
+  }
+  return null;
+}
+
+async function showFromFolder(folder, fileId){
+  // build prev, current, next
+  const [prev, cur, next] = neighborsOf(fileId);
+  const urls = [`${folder}/${prev}.jpg`, `${folder}/${cur}.jpg`, `${folder}/${next}.jpg`];
+  const checks = await Promise.all(urls.map(u => loadImg(u)));
+  const found = checks.filter(c => c.ok);
+  if (!found.length){ msg.textContent = "Couldn’t load neighbors in that folder."; return; }
+  // labels
+  const labels = ["Previous", "This photo", "Next"];
+  for (let i=0;i<found.length;i++){
+    const label = labels[[prev,cur,next].indexOf(found[i].url.split("/").pop().replace(".jpg",""))] || "";
+    addCard(found[i].url, label);
+  }
+}
+
+async function onGo(){
+  try{
+    grid.innerHTML = "";
+    msg.textContent = "Searching…";
+    const raw = ($("#photoId")||document.querySelector('input[type="text"]')).value.trim();
+    if (!raw){ msg.textContent = "Please enter a Photo ID."; return; }
+
+    const norm = normalizeInput(raw);
+    let mainUrl = null;
+
+    if (norm.kind === "fullUrl"){
+      mainUrl = norm.url;
+    } else {
+      // typed just CH… -> find folder by probing recent dates
+      mainUrl = await findMainUrlById(norm.id, 90);
+      if (!mainUrl){ msg.textContent = "Sorry, we couldn’t find that ID recently."; return; }
     }
 
-    function deliveryUrl(pubId){
-      return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
-    }
-    function rawUrl(folder){
-      return `https://res.cloudinary.com/${CLOUD}/raw/upload/${folder}/index.txt`;
-    }
+    // derive folder + file from the working URL
+    const pubId = publicIdFromUrl(mainUrl);
+    if (!pubId){ msg.textContent = "Could not parse URL."; return; }
+    const folder = `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId.replace(/\/[^/]+$/,"")}`;
+    const fileId = pubId.split("/").pop();
 
-    function plusMinusOne(id){
-      const digits = (String(id).match(/(\d+)$/) || [])[1] || "";
-      const prefix = String(id).slice(0, id.length - digits.length);
-      const n = parseInt(digits || "0", 10);
-      return [`${prefix}${n-1}`, id, `${prefix}${n+1}`];
-    }
+    await showFromFolder(folder, fileId);
+    msg.textContent = "Done.";
+  } catch(e){
+    msg.textContent = "Error. Check DevTools console.";
+    console.error(e);
+  }
+}
 
-    async function imgExists(pubId){
-      const url = deliveryUrl(pubId);
-      return new Promise(resolve=>{
-        const img = new Image();
-        img.onload  = () => resolve({ ok:true,  url, pubId });
-        img.onerror = () => resolve({ ok:false, url, pubId });
-        img.src = url;
-      });
-    }
-
-    function addCard(url, label){
-      const el = document.createElement("div");
-      el.className = "card";
-      el.innerHTML = `
-        <img class="thumb" src="${url}" alt="">
-        <div class="cap">${label}</div>
-        <a class="small" href="${url}" target="_blank" rel="noopener">Open original</a>
-      `;
-      grid.appendChild(el);
-    }
-
-    function* recentCandidates(shortId, startDate = new Date()){
-      const venue = venueFromId(shortId);
-      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-      for(let d=0; d<LOOKBACK_DAYS; d++){
-        const dt  = new Date(startDate.getTime() - d*864e5);
-        const Y   = dt.getUTCFullYear();
-        const M   = months[dt.getUTCMonth()];
-        const mdY = String(dt.getUTCMonth()+1).padStart(2,"0")+"."+String(dt.getUTCDate()).padStart(2,"0")+"."+dt.getUTCFullYear();
-        yield `${venue}/${Y}/${M}/${mdY}/${shortId}`; // month-in-path
-        yield `${venue}/${Y}/${mdY}/${shortId}`;      // no-month
-      }
-    }
-
-    async function findMainPublicId(shortOrPath){
-      // Full Cloudinary URL -> public_id
-      if (/res\.cloudinary\.com/.test(shortOrPath)){
-        const m = shortOrPath.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
-        if (m) return m[1];
-      }
-      // Full path -> keep as-is
-      if (shortOrPath.includes("/")) return shortOrPath.trim();
-
-      const shortId = shortOrPath.trim();
-      for (const pubId of recentCandidates(shortId)){
-        const probe = await imgExists(pubId);
-        if (probe.ok) return pubId;
-      }
-      return null;
-    }
-
-    async function fetchNeighborsFromIndex(foundPubId){
-      const folder = foundPubId.replace(/\/[^/]+$/, "");   // drop filename
-      const file   = foundPubId.split("/").pop();
-      const url    = rawUrl(folder);
-
-      try{
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) return null;
-        const txt   = await res.text();
-        const names = txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-        const i = names.indexOf(file);
-        if (i === -1) return null;
-
-        const picks = [];
-        if (i-1 >= 0) picks.push(names[i-1]);
-        picks.push(names[i]);
-        if (i+1 < names.length) picks.push(names[i+1]);
-
-        return picks.map(name => folder + "/" + name);
-      }catch(e){
-        return null;
-      }
-    }
-
-    async function show(shortInput){
-      grid.innerHTML = "";
-      msg.textContent = "Searching…";
-
-      const mainPubId = await findMainPublicId(shortInput);
-      if (!mainPubId){
-        msg.innerHTML = `<span style="color:#f88">Sorry, we couldn’t find that ID recently.</span>`;
-        return;
-      }
-
-      // Prefer index.txt (exact ordering). Fallback to +/- 1.
-      let pubIds = await fetchNeighborsFromIndex(mainPubId);
-      if (!pubIds){
-        const folder = mainPubId.replace(/\/[^/]+$/, "");
-        const file   = mainPubId.split("/").pop();
-        const [prev, cur, next] = plusMinusOne(file);
-        pubIds = [`${folder}/${prev}`, `${folder}/${cur}`, `${folder}/${next}`];
-      }
-
-      const checks = await Promise.all(pubIds.map(pid => imgExists(pid)));
-      const ok = checks.filter(c=>c.ok);
-
-      if (ok.length){
-        const centerName = mainPubId.split("/").pop();
-        ok.forEach(c => {
-          const name = c.pubId.split("/").pop();
-          let label = "This photo";
-          if (name < centerName) label = "Previous";
-          if (name > centerName) label = "Next";
-          addCard(c.url, `<b>${label}</b> · ${c.pubId}`);
-        });
-        msg.textContent = "Done.";
-      }else{
-        msg.textContent = "We found the folder, but neighbors didn’t render.";
-      }
-    }
-
-    document.getElementById("goBtn").onclick = () => {
-      const raw = document.getElementById("photoId").value.trim();
-      if (!raw){ msg.textContent = "Please enter a Photo ID."; return; }
-      show(raw);
-    };
-  </script>
-</body>
-</html>
+// wire up button (works with your existing page)
+const goBtn = document.getElementById("goBtn") || document.querySelector('button');
+if (goBtn) goBtn.onclick = onGo;
+</script>
