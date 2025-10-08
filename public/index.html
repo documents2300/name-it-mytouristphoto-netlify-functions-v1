@@ -1,219 +1,104 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Find Your Photos | MyTouristPhoto</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background: #0b1220;
-      color: #e6e8f0;
-    }
-    .wrap {
-      max-width: 900px;
-      margin: 50px auto;
-      padding: 0 16px;
-    }
-    h1 {
-      font-size: 28px;
-      margin-bottom: 10px;
-      color: #22c55e;
-    }
-    .panel {
-      background: #0f172a;
-      border: 1px solid #1f2937;
-      border-radius: 12px;
-      padding: 16px 20px;
-    }
-    input[type=text] {
-      width: 360px;
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid #1f2937;
-      background: #0b1220;
-      color: #e6e8f0;
-      font-size: 15px;
-    }
-    button {
-      padding: 10px 16px;
-      border: 0;
-      border-radius: 8px;
-      background: #22c55e;
-      color: #052e14;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
-    .tip {
-      color: #94a3b8;
-      font-size: 13px;
-      margin-top: 8px;
-    }
-    .row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 14px;
-      margin-top: 20px;
-    }
-    .card {
-      width: 300px;
-      background: #0f172a;
-      border: 1px solid #1f2937;
-      border-radius: 12px;
-      overflow: hidden;
-    }
-    .card img {
-      display: block;
-      width: 100%;
-      height: auto;
-    }
-    .cap {
-      padding: 6px 10px;
-      font-size: 13px;
-      color: #9fb0c3;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    footer {
-      margin-top: 60px;
-      font-size: 13px;
-      color: #64748b;
-      text-align: center;
-    }
-    .ok { color: #22c55e; }
-    .err { color: #ef4444; }
-  </style>
-</head>
-
-<body>
-  <div class="wrap">
-    <h1>Find your photos</h1>
-
-    <div class="panel">
-      <p>Enter your <strong>Photo ID</strong> (for example <code>CH0928251007</code>) and click <strong>Load</strong>.</p>
-      <ol class="tip" style="margin-left:20px">
-        <li>Type your ID number (e.g. <code>CH0928251007</code>).</li>
-        <li>Click Load.</li>
-        <li>Your photo will appear with the ones taken right before and after it.</li>
-      </ol>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
-        <input id="photoId" type="text" placeholder="CH0928251007" />
-        <button id="goBtn">Load</button>
-      </div>
-      <div id="msg" class="tip" style="margin-top:8px;"></div>
-    </div>
-
-    <div id="row" class="row"></div>
-
-    <footer>
-      Having trouble? Contact us at 
-      <a href="mailto:info@mytouristphoto.com" style="color:#22c55e;">info@mytouristphoto.com</a><br>
-      &copy; 2025 MyTouristPhoto. All rights reserved.
-    </footer>
-  </div>
-
 <script>
-const CLOUD = "dvqpndvej"; // your Cloudinary cloud name
-const row = document.getElementById("row");
-const msg = document.getElementById("msg");
-const $  = s => document.querySelector(s);
+const CLOUD = "dvqpndvej"; // your cloud name
+const $ = s => document.querySelector(s);
+const row = $("#row"); const msg = $("#msg");
+function card(url, label){
+  const el = document.createElement("div");
+  el.className = "card";
+  el.innerHTML = `
+    <img src="${url}" style="display:block;width:100%;height:auto" />
+    <div style="padding:6px 8px;font:14px system-ui, sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+      ${label}<br/>
+      <span style="font-size:12px;color:#8aa">${url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}</span>
+    </div>`;
+  const img = el.querySelector("img");
+  img.onerror = () => el.remove(); // if it 404s, just remove that card
+  row.appendChild(el);
+}
+function delivery(pubId){ return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`; }
 
-const imgUrl = (publicId) => `https://res.cloudinary.com/${CLOUD}/image/upload/${publicId}.jpg`;
-
-async function headOK(url) {
-  try {
-    const res = await fetch(url, { method: "HEAD" });
-    return res.ok;
-  } catch {
-    return false;
+async function findMainPublicId(shortOrPath){
+  // If the user pasted a full Cloudinary URL, turn it into public_id
+  if (/res\.cloudinary\.com/.test(shortOrPath)) {
+    const m = shortOrPath.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
+    if (m) return m[1];
   }
-}
+  // If they pasted a full folder path (chiefs-luau/.../CH...), use it as-is
+  if (shortOrPath.includes("/")) return shortOrPath;
 
-function addCard(publicId, label) {
-  const d = document.createElement("div");
-  d.className = "card";
-  d.innerHTML = `
-    <img src="${imgUrl(publicId)}" alt="">
-    <div class="cap"><strong>${label}</strong></div>
-    <div class="cap">${publicId}</div>`;
-  row.appendChild(d);
-}
-
-function buildCandidates(shortId) {
+  // They typed a short ID like CH0928251007: probe recent dates to find the folder
+  const id = shortOrPath.trim();
   const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const start = new Date();
-  const out = [];
-  for (let d = 0; d < 120; d++) {
-    const dt = new Date(start); dt.setDate(dt.getDate() - d);
+  const today = new Date();
+  // try last ~90 days, month-in-path first then no-month
+  for (let d=0; d<90; d++){
+    const dt = new Date(today.getTime()-d*86400000);
     const Y = dt.getFullYear();
-    const m = String(dt.getMonth()+1).padStart(2,"0");
     const M = months[dt.getMonth()];
-    const day = String(dt.getDate()).padStart(2,"0");
-    const mdY = `${m}.${day}.${Y}`;
-    out.push(`chiefs-luau/${Y}/${M}/${mdY}/${shortId}`);
-    out.push(`chiefs-luau/${Y}/${mdY}/${shortId}`);
-    out.push(`ka-moana-luau/${Y}/${M}/${mdY}/${shortId}`);
-    out.push(`ka-moana-luau/${Y}/${mdY}/${shortId}`);
-  }
-  return [...new Set(out)];
-}
-
-async function findMainPublicId(shortOrPath) {
-  if (shortOrPath.includes("/")) {
-    const direct = shortOrPath.replace(/\.jpg$/i, "");
-    if (await headOK(imgUrl(direct))) return direct;
-  }
-  const cand = buildCandidates(shortOrPath.trim());
-  for (const p of cand) {
-    if (await headOK(imgUrl(p))) return p;
+    const mdY = String(dt.getMonth()+1).padStart(2,"0")+"."+String(dt.getDate()).padStart(2,"0")+"."+Y;
+    const venue = id.startsWith("KL") ? "ka-moana-luau" : "chiefs-luau";
+    const candidates = [
+      `${venue}/${Y}/${M}/${mdY}/${id}`,
+      `${venue}/${Y}/${mdY}/${id}`,
+    ];
+    for (const p of candidates){
+      // quick existence check by creating an <img>; faster than HEAD and avoids CORS
+      const ok = await new Promise(res=>{
+        const img = new Image();
+        img.onload = ()=>res(true);
+        img.onerror = ()=>res(false);
+        img.src = delivery(p)+"?cb="+Date.now();
+      });
+      if (ok) return p;
+    }
   }
   return null;
 }
 
-async function neighborsViaIndex(foundPublicId) {
-  const folder = foundPublicId.replace(/\/[^/]+$/, "");
-  const file   = foundPublicId.split("/").pop();
-  const indexUrl = `https://res.cloudinary.com/${CLOUD}/raw/upload/${folder}/index.txt`;
-
-  let text = "";
-  try {
-    const res = await fetch(indexUrl, { cache: "no-store" });
-    if (res.ok) text = await res.text();
-  } catch {}
-
-  if (!text) {
-    msg.innerHTML = `<span class="err">index.txt not found in ${folder}</span>`;
-    return [foundPublicId];
-  }
-
-  const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  const i = names.indexOf(file);
-  if (i === -1) return [foundPublicId];
-
-  const picks = [names[i-1], names[i], names[i+1]].filter(Boolean).map(n => `${folder}/${n}`);
-  const checks = await Promise.all(picks.map(p => headOK(imgUrl(p)).then(ok => ok ? p : null)));
-  return checks.filter(Boolean);
+async function loadIndexTxt(folderPublicId){
+  // index.txt sits under the SAME folder as the images, but via /raw/upload/
+  const url = `https://res.cloudinary.com/${CLOUD}/raw/upload/${folderPublicId}/index.txt?cb=`+Date.now();
+  const res = await fetch(url, { cache:"no-store" });
+  if (!res.ok) return null;
+  const txt = await res.text();
+  const lines = txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  return lines; // array of CH… names (no .jpg)
 }
 
-document.getElementById("goBtn").onclick = async () => {
+function neighborsFromIndex(names, file){
+  const i = names.indexOf(file);
+  if (i === -1) return { prev:null, cur:file, next:null };
+  return {
+    prev: names[i-1] ?? null,
+    cur:  names[i],
+    next: names[i+1] ?? null
+  };
+}
+
+$("#goBtn").onclick = async () => {
   row.innerHTML = "";
-  msg.textContent = "Searching...";
-  const input = $("#photoId").value.trim();
-  if (!input) { msg.textContent = "Please enter a Photo ID."; return; }
+  msg.textContent = "Searching…";
 
-  const found = await findMainPublicId(input);
-  if (!found) { msg.innerHTML = '<span class="err">Sorry, we couldn’t find that ID recently.</span>'; return; }
+  const raw = document.querySelector('input[type="text"]').value.trim();
+  if (!raw){ msg.textContent = "Please enter a Photo ID."; return; }
 
-  const picks = await neighborsViaIndex(found);
-  picks.forEach((p, idx) => addCard(p, idx === 1 ? "This photo" : (idx === 0 ? "Previous" : "Next")));
-  msg.innerHTML = '<span class="ok">Done.</span>';
+  // 1) find the MAIN photo's public_id (discovers the correct folder)
+  const mainPubId = await findMainPublicId(raw);
+  if (!mainPubId){ msg.textContent = "Sorry, we couldn’t find that ID recently."; return; }
+
+  const folder = mainPubId.replace(/\/[^/]+$/, ""); // drop filename
+  const file   = mainPubId.split("/").pop();
+
+  // 2) read index.txt from that folder and compute neighbors by position
+  const names = await loadIndexTxt(folder);
+  if (!names){ msg.innerHTML = "index.txt not found in <span style='color:#9fd'>" + folder + "</span>"; return; }
+  const set = neighborsFromIndex(names, file);
+
+  msg.innerHTML = "Done.";
+
+  // 3) render CARDS (prev, current, next). Missing ones auto-disappear on 404.
+  if (set.prev) card(delivery(`${folder}/${set.prev}`), "Previous");
+  card(delivery(`${folder}/${set.cur}`), "This photo");
+  if (set.next) card(delivery(`${folder}/${set.next}`), "Next");
 };
 </script>
-</body>
-</html>
