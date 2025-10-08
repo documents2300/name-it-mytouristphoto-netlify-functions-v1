@@ -1,147 +1,189 @@
-<script>
-  // ===== CONFIG =====
-  const CLOUD = "dvqpndvej";                 // your Cloudinary cloud
-  const LOOKBACK_DAYS = 120;
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Find your photos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --txt:#e5e7eb; --mut:#9ca3af; --brand:#22c55e; --cap:#1f2937; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif}
+    .wrap{max-width:980px;margin:40px auto;padding:0 16px}
+    h1{font-size:32px;margin:0 0 6px} .lead{color:var(--mut);margin:0 0 24px}
+    .panel{background:var(--panel);border:1px solid #1f2937;border-radius:12px;padding:18px 16px;margin:18px 0}
+    .row{display:flex;gap:10px;align-items:center}
+    input[type=text]{flex:1;min-width:260px;background:#0b1220;border:1px solid #223049;border-radius:10px;
+      padding:10px 12px;color:var(--txt);outline:none}
+    button{background:var(--brand);border:0;border-radius:10px;color:#052e16;padding:10px 18px;font-weight:600;cursor:pointer}
+    #msg{color:var(--mut);margin:10px 2px 0}
+    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:18px}
+    .card{background:#0b1220;border:1px solid #223049;border-radius:12px;overflow:hidden}
+    .thumb{display:block;width:100%;height:auto}
+    .cap{padding:10px 12px;background:var(--cap);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .small{display:inline-block;padding:10px 12px;color:#93c5fd;text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Find your photos</h1>
+    <p class="lead">Enter your Photo ID (for example <b>CH0928251007</b>) and click Load.</p>
 
-  // ===== small helpers =====
-  const $ = s => document.querySelector(s);
-  const msg = $("#msg");
-  const grid = $("#grid");
+    <div class="panel">
+      <div class="row">
+        <input id="photoId" type="text" placeholder="CH0928251007" />
+        <button id="goBtn">Load</button>
+      </div>
+      <div id="msg"></div>
+    </div>
 
-  function venueFromId(id) {
-    const p = String(id || "").toUpperCase();
-    return p.startsWith("KL") ? "ka-moana-luau" : "chiefs-luau";
-  }
+    <div id="grid"></div>
+  </div>
 
-  function deliveryUrl(pubId){
-    return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
-  }
-  function rawUrl(folder){
-    return `https://res.cloudinary.com/${CLOUD}/raw/upload/${folder}/index.txt`;
-  }
+  <script>
+    // ===== CONFIG =====
+    const CLOUD = "dvqpndvej";                 // your Cloudinary cloud
+    const LOOKBACK_DAYS = 120;
 
-  function plusMinusOne(id){
-    const digits = (String(id).match(/(\d+)$/) || [])[1] || "";
-    const prefix = String(id).slice(0, id.length - digits.length);
-    const n = parseInt(digits || "0", 10);
-    return [`${prefix}${n-1}`, id, `${prefix}${n+1}`];
-  }
+    // ===== small helpers =====
+    const $ = s => document.querySelector(s);
+    const msg = $("#msg");
+    const grid = $("#grid");
 
-  async function imgExists(pubId){
-    const url = deliveryUrl(pubId);
-    return new Promise(resolve=>{
-      const img = new Image();
-      img.onload  = () => resolve({ ok:true,  url, pubId });
-      img.onerror = () => resolve({ ok:false, url, pubId });
-      img.src = url;
-    });
-  }
-
-  function addCard(url, label){
-    const el = document.createElement("div");
-    el.className = "card";
-    el.innerHTML = `
-      <img class="thumb" src="${url}" alt="">
-      <div class="cap">${label}</div>
-      <a class="small" href="${url}" target="_blank" rel="noopener">Open original</a>
-    `;
-    grid.appendChild(el);
-  }
-
-  function* recentCandidates(shortId, startDate = new Date()){
-    const venue = venueFromId(shortId);
-    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    for(let d=0; d<LOOKBACK_DAYS; d++){
-      const dt  = new Date(startDate.getTime() - d*864e5);
-      const Y   = dt.getUTCFullYear();
-      const M   = months[dt.getUTCMonth()];
-      const mdY = String(dt.getUTCMonth()+1).padStart(2,"0")+"."+String(dt.getUTCDate()).padStart(2,"0")+"."+dt.getUTCFullYear();
-      yield `${venue}/${Y}/${M}/${mdY}/${shortId}`; // month-in-path
-      yield `${venue}/${Y}/${mdY}/${shortId}`;      // no-month
+    function venueFromId(id) {
+      const p = String(id || "").toUpperCase();
+      return p.startsWith("KL") ? "ka-moana-luau" : "chiefs-luau";
     }
-  }
 
-  async function findMainPublicId(shortOrPath){
-    // If they pasted a full Cloudinary URL, strip to public_id
-    if (/res\.cloudinary\.com/.test(shortOrPath)){
-      const m = shortOrPath.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
-      if (m) return m[1];
+    function deliveryUrl(pubId){
+      return `https://res.cloudinary.com/${CLOUD}/image/upload/${pubId}.jpg`;
     }
-    // If they pasted a full folder path, keep it
-    if (shortOrPath.includes("/")) return shortOrPath.trim();
-
-    const shortId = shortOrPath.trim();
-    for (const pubId of recentCandidates(shortId)){
-      const probe = await imgExists(pubId);
-      if (probe.ok) return pubId;
+    function rawUrl(folder){
+      return `https://res.cloudinary.com/${CLOUD}/raw/upload/${folder}/index.txt`;
     }
-    return null;
-  }
 
-  async function fetchNeighborsFromIndex(foundPubId){
-    const folder = foundPubId.replace(/\/[^/]+$/, "");   // drop filename
-    const file   = foundPubId.split("/").pop();
-    const url    = rawUrl(folder);
+    function plusMinusOne(id){
+      const digits = (String(id).match(/(\d+)$/) || [])[1] || "";
+      const prefix = String(id).slice(0, id.length - digits.length);
+      const n = parseInt(digits || "0", 10);
+      return [`${prefix}${n-1}`, id, `${prefix}${n+1}`];
+    }
 
-    try{
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) return null;
-      const txt   = await res.text();
-      const names = txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-      const i = names.indexOf(file);
-      if (i === -1) return null;
+    async function imgExists(pubId){
+      const url = deliveryUrl(pubId);
+      return new Promise(resolve=>{
+        const img = new Image();
+        img.onload  = () => resolve({ ok:true,  url, pubId });
+        img.onerror = () => resolve({ ok:false, url, pubId });
+        img.src = url;
+      });
+    }
 
-      const picks = [];
-      if (i-1 >= 0) picks.push(names[i-1]);
-      picks.push(names[i]);
-      if (i+1 < names.length) picks.push(names[i+1]);
+    function addCard(url, label){
+      const el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = `
+        <img class="thumb" src="${url}" alt="">
+        <div class="cap">${label}</div>
+        <a class="small" href="${url}" target="_blank" rel="noopener">Open original</a>
+      `;
+      grid.appendChild(el);
+    }
 
-      return picks.map(name => folder + "/" + name);
-    }catch(e){
+    function* recentCandidates(shortId, startDate = new Date()){
+      const venue = venueFromId(shortId);
+      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      for(let d=0; d<LOOKBACK_DAYS; d++){
+        const dt  = new Date(startDate.getTime() - d*864e5);
+        const Y   = dt.getUTCFullYear();
+        const M   = months[dt.getUTCMonth()];
+        const mdY = String(dt.getUTCMonth()+1).padStart(2,"0")+"."+String(dt.getUTCDate()).padStart(2,"0")+"."+dt.getUTCFullYear();
+        yield `${venue}/${Y}/${M}/${mdY}/${shortId}`; // month-in-path
+        yield `${venue}/${Y}/${mdY}/${shortId}`;      // no-month
+      }
+    }
+
+    async function findMainPublicId(shortOrPath){
+      // Full Cloudinary URL -> public_id
+      if (/res\.cloudinary\.com/.test(shortOrPath)){
+        const m = shortOrPath.match(/\/image\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
+        if (m) return m[1];
+      }
+      // Full path -> keep as-is
+      if (shortOrPath.includes("/")) return shortOrPath.trim();
+
+      const shortId = shortOrPath.trim();
+      for (const pubId of recentCandidates(shortId)){
+        const probe = await imgExists(pubId);
+        if (probe.ok) return pubId;
+      }
       return null;
     }
-  }
 
-  async function show(shortInput){
-    grid.innerHTML = "";
-    msg.textContent = "Searching…";
+    async function fetchNeighborsFromIndex(foundPubId){
+      const folder = foundPubId.replace(/\/[^/]+$/, "");   // drop filename
+      const file   = foundPubId.split("/").pop();
+      const url    = rawUrl(folder);
 
-    const mainPubId = await findMainPublicId(shortInput);
-    if (!mainPubId){
-      msg.innerHTML = `<span style="color:#f88">Sorry, we couldn’t find that ID recently.</span>`;
-      return;
+      try{
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return null;
+        const txt   = await res.text();
+        const names = txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+        const i = names.indexOf(file);
+        if (i === -1) return null;
+
+        const picks = [];
+        if (i-1 >= 0) picks.push(names[i-1]);
+        picks.push(names[i]);
+        if (i+1 < names.length) picks.push(names[i+1]);
+
+        return picks.map(name => folder + "/" + name);
+      }catch(e){
+        return null;
+      }
     }
 
-    // Prefer index.txt (exact ordering). Fallback to +/- 1.
-    let pubIds = await fetchNeighborsFromIndex(mainPubId);
-    if (!pubIds){
-      const folder = mainPubId.replace(/\/[^/]+$/, "");
-      const file   = mainPubId.split("/").pop();
-      const [prev, cur, next] = plusMinusOne(file);
-      pubIds = [`${folder}/${prev}`, `${folder}/${cur}`, `${folder}/${next}`];
+    async function show(shortInput){
+      grid.innerHTML = "";
+      msg.textContent = "Searching…";
+
+      const mainPubId = await findMainPublicId(shortInput);
+      if (!mainPubId){
+        msg.innerHTML = `<span style="color:#f88">Sorry, we couldn’t find that ID recently.</span>`;
+        return;
+      }
+
+      // Prefer index.txt (exact ordering). Fallback to +/- 1.
+      let pubIds = await fetchNeighborsFromIndex(mainPubId);
+      if (!pubIds){
+        const folder = mainPubId.replace(/\/[^/]+$/, "");
+        const file   = mainPubId.split("/").pop();
+        const [prev, cur, next] = plusMinusOne(file);
+        pubIds = [`${folder}/${prev}`, `${folder}/${cur}`, `${folder}/${next}`];
+      }
+
+      const checks = await Promise.all(pubIds.map(pid => imgExists(pid)));
+      const ok = checks.filter(c=>c.ok);
+
+      if (ok.length){
+        const centerName = mainPubId.split("/").pop();
+        ok.forEach(c => {
+          const name = c.pubId.split("/").pop();
+          let label = "This photo";
+          if (name < centerName) label = "Previous";
+          if (name > centerName) label = "Next";
+          addCard(c.url, `<b>${label}</b> · ${c.pubId}`);
+        });
+        msg.textContent = "Done.";
+      }else{
+        msg.textContent = "We found the folder, but neighbors didn’t render.";
+      }
     }
 
-    const checks = await Promise.all(pubIds.map(pid => imgExists(pid)));
-    const ok = checks.filter(c=>c.ok);
-
-    if (ok.length){
-      const centerName = mainPubId.split("/").pop();
-      ok.forEach(c => {
-        const name = c.pubId.split("/").pop();
-        let label = "This photo";
-        if (name < centerName) label = "Previous";
-        if (name > centerName) label = "Next";
-        addCard(c.url, `<b>${label}</b> · ${c.pubId}`);
-      });
-      msg.textContent = "Done.";
-    }else{
-      msg.textContent = "We found the folder, but neighbors didn’t render.";
-    }
-  }
-
-  $("#goBtn").onclick = () => {
-    const raw = $("#photoId").value.trim();
-    if (!raw){ msg.textContent = "Please enter a Photo ID."; return; }
-    show(raw);
-  };
-</script>
+    document.getElementById("goBtn").onclick = () => {
+      const raw = document.getElementById("photoId").value.trim();
+      if (!raw){ msg.textContent = "Please enter a Photo ID."; return; }
+      show(raw);
+    };
+  </script>
+</body>
+</html>
