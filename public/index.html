@@ -79,20 +79,17 @@
   </style>
 </head>
 <body>
+  <h1>Find Neighbor Photos</h1>
+  <p>Paste a full Cloudinary URL (like below) and click Load.</p>
+  <p><small>Example:  
+  https://res.cloudinary.com/dvqpndvej/image/upload/chiefs-luau/2025/September/09.28.2025/CH0928251006.jpg</small></p>
 
-  <h1>Find neighbor photos</h1>
-  <p>Paste a Cloudinary URL or just the short ID (e.g., <b>CH0928251006</b>) and click Load.</p>
-  <input id="urlInput" placeholder="Full Cloudinary URL or CH0928251006" />
+  <input id="urlInput" placeholder="Paste Cloudinary URL ending in .jpg" />
   <button id="go">Load</button>
   <div id="msg"></div>
   <div id="row"></div>
 
   <script>
-    // --- CONFIG ---
-    const CLOUD = "dvqpndvej";
-    const BASE_FOLDER = "chiefs-luau/2025/September/09.28.2025"; // fixed folder
-
-    // --- helpers ---
     const $ = s => document.querySelector(s);
     function imgOk(url){ return new Promise(r => {
       const i = new Image();
@@ -100,17 +97,6 @@
       i.onerror = () => r({ok:false, url});
       i.src = url;
     });}
-    function urlFor(folder, file){ return `https://res.cloudinary.com/${CLOUD}/image/upload/${folder}/${file}.jpg`; }
-    function neighbors(file){
-      const m = (file.match(/(\d+)$/)||[])[1]||"";
-      const prefix = file.slice(0, file.length - m.length);
-      const n = parseInt(m||"0",10);
-      return [
-        {label:"Previous", file:`${prefix}${n-1}`},
-        {label:"This photo", file:`${prefix}${n}`},
-        {label:"Next", file:`${prefix}${n+1}`}
-      ];
-    }
     function addCard(url,label){
       const card = document.createElement("div");
       card.className = "card";
@@ -122,16 +108,10 @@
       $("#row").appendChild(card);
     }
 
-    // Parse either a full Cloudinary URL or short ID
-    function parseInput(v){
-      const raw = (v||"").trim();
-      if (!raw) return null;
-      const m = raw.match(/^https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(?:v\d+\/)?(.+?)\.(?:jpe?g|png|webp)$/i);
-      if (m){
-        const path = m[1];
-        return { folder: path.replace(/\/[^/]+$/,""), file: path.split("/").pop() };
-      }
-      return { folder: BASE_FOLDER, file: raw.toUpperCase() };
+    function parseInput(url){
+      const m = url.match(/^https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(.+?)\/([^/]+)\.jpg$/i);
+      if (!m) return null;
+      return { folder: m[1], file: m[2] };
     }
 
     async function run(){
@@ -141,14 +121,25 @@
       row.innerHTML = "";
       msg.textContent = "Loading...";
 
-      const parsed = parseInput(input.value);
-      if (!parsed){ msg.textContent = "Please enter a URL or short ID."; return; }
+      const parsed = parseInput(input.value.trim());
+      if (!parsed){ msg.textContent = "Please enter a full Cloudinary URL ending in .jpg"; return; }
 
-      const urls = neighbors(parsed.file).map(x => ({label:x.label, url:urlFor(parsed.folder, x.file)}));
-      const checks = await Promise.all(urls.map(x => imgOk(x.url)));
-      const found = checks.map((c,i)=>({...urls[i], ok:c.ok})).filter(x=>x.ok);
+      const m = parsed.file.match(/(\d+)$/);
+      if (!m){ msg.textContent = "Could not find number at end of filename."; return; }
 
-      if (!found.length){ msg.textContent = "None of the 3 images loaded. Double-check the ID (CH... uppercase) and folder."; return; }
+      const n = parseInt(m[1],10);
+      const prefix = parsed.file.slice(0, parsed.file.length - m[1].length);
+
+      const targets = [
+        {label:"Previous", url:`https://res.cloudinary.com/dvqpndvej/image/upload/${parsed.folder}/${prefix}${n-1}.jpg`},
+        {label:"This photo", url:`https://res.cloudinary.com/dvqpndvej/image/upload/${parsed.folder}/${prefix}${n}.jpg`},
+        {label:"Next", url:`https://res.cloudinary.com/dvqpndvej/image/upload/${parsed.folder}/${prefix}${n+1}.jpg`}
+      ];
+
+      const checks = await Promise.all(targets.map(t => imgOk(t.url)));
+      const found = checks.map((c,i)=>({...targets[i], ok:c.ok})).filter(x=>x.ok);
+
+      if (!found.length){ msg.textContent = "No images found for that range."; return; }
 
       msg.textContent = "Done.";
       found.forEach(x => addCard(x.url, x.label));
