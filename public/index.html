@@ -1,87 +1,51 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Neighbor Photos</title>
-<style>
-  body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  .wrap{max-width:900px;margin:60px auto;padding:0 20px}
-  h1{font-size:26px;margin-bottom:10px}
-  .inputBox{display:flex;gap:10px;margin-top:10px}
-  input{flex:1;padding:10px;border:1px solid #333;border-radius:8px;background:#161b22;color:#c9d1d9}
-  button{background:#238636;border:none;border-radius:8px;padding:10px 18px;color:white;cursor:pointer}
-  .row{display:flex;flex-wrap:wrap;gap:16px;margin-top:20px}
-  .tile{width:300px;background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden}
-  .tile img{width:100%;display:block}
-  .tile .cap{padding:6px 8px;font-size:12px;color:#8b949e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .msg{margin-top:10px;color:#8b949e}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>Find Neighbor Photos</h1>
-  <p>Paste a full Cloudinary URL (like below), and it will show that photo plus the previous and next ones in the same folder.</p>
-  <code>https://res.cloudinary.com/dvqpndvej/image/upload/chiefs-luau/2025/September/09.28.2025/CH0928251006.jpg</code>
-  <div class="inputBox">
-    <input id="urlInput" placeholder="Paste full Cloudinary URL ending in .jpg">
-    <button id="loadBtn">Load</button>
-  </div>
-  <div id="msg" class="msg"></div>
-  <div id="row" class="row"></div>
-</div>
-
 <script>
-const row = document.getElementById('row');
-const msg = document.getElementById('msg');
+  const row = document.getElementById('row');
+  const msg = document.getElementById('msg');
 
-function imgExists(url){
-  return new Promise(r=>{
-    const i=new Image();
-    i.onload=()=>r({ok:true,url});
-    i.onerror=()=>r({ok:false,url});
-    i.src=url;
-  });
-}
-
-function addTile(url){
-  const div=document.createElement('div');
-  div.className='tile';
-  div.innerHTML=`<img src="${url}"><div class="cap">${url}</div>`;
-  row.appendChild(div);
-}
-
-document.getElementById('loadBtn').onclick=async()=>{
-  row.innerHTML='';
-  msg.textContent='Loading...';
-
-  const input=document.getElementById('urlInput').value.trim();
-  if(!input.endsWith('.jpg')){
-    msg.textContent='URL must end with .jpg';
-    return;
+  function addTile(url, label) {
+    const div = document.createElement('div');
+    div.className = 'tile';
+    div.innerHTML = `
+      <img src="${url}" alt="${label}">
+      <div class="cap"><strong>${label}:</strong> ${url}</div>
+    `;
+    row.appendChild(div);
   }
 
-  // Extract folder + filename
-  const folder=input.substring(0,input.lastIndexOf('/'));
-  const file=input.substring(input.lastIndexOf('/')+1,input.length-4); // drop .jpg
-  const m=file.match(/(\d+)$/);
-  if(!m){ msg.textContent='Could not find number in filename.'; return; }
-  const prefix=file.slice(0,-m[1].length);
-  const num=parseInt(m[1]);
+  document.getElementById('loadBtn').onclick = () => {
+    row.innerHTML = '';
+    msg.textContent = 'Loading...';
 
-  const urls=[
-    `${folder}/${prefix}${num-1}.jpg`,
-    `${folder}/${prefix}${num}.jpg`,
-    `${folder}/${prefix}${num+1}.jpg`
-  ];
+    const input = document.getElementById('urlInput').value.trim();
 
-  const results=await Promise.all(urls.map(u=>imgExists(u)));
-  const found=results.filter(x=>x.ok);
+    // Require a full Cloudinary JPG URL (exactly like the one you open in the browser)
+    if (!/^https:\/\/res\.cloudinary\.com\/.+\/image\/upload\/.+\.jpg$/i.test(input)) {
+      msg.textContent = 'Please paste the full Cloudinary URL that ends with .jpg';
+      return;
+    }
 
-  if(!found.length){ msg.textContent='No images found for that range.'; return; }
-  msg.textContent='';
-  found.forEach(x=>addTile(x.url));
-};
+    // Split folder vs filename
+    const lastSlash = input.lastIndexOf('/');
+    const folder = input.slice(0, lastSlash);               // .../09.28.2025
+    const fileWithExt = input.slice(lastSlash + 1);         // CH0928251006.jpg
+    const file = fileWithExt.replace(/\.jpg$/i, '');        // CH0928251006
+
+    // Pull trailing number, keep prefix
+    const m = file.match(/(\d+)$/);
+    if (!m) { msg.textContent = 'Could not detect the trailing number in the filename.'; return; }
+    const numStr = m[1];
+    const prefix = file.slice(0, -numStr.length);
+    const n = parseInt(numStr, 10);
+
+    // Build the three URLs (prev, current, next)
+    const prevUrl = `${folder}/${prefix}${n - 1}.jpg`;
+    const currUrl = `${folder}/${prefix}${n}.jpg`;
+    const nextUrl = `${folder}/${prefix}${n + 1}.jpg`;
+
+    // Render them directly — no pre-checks
+    msg.textContent = '';
+    addTile(prevUrl, 'Previous');
+    addTile(currUrl, 'This photo');
+    addTile(nextUrl, 'Next');
+  };
 </script>
-</body>
-</html>
