@@ -1,97 +1,89 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Find neighbor photos</title>
-  <style>
-    :root{color-scheme:dark}
-    body{margin:0;background:#0b1220;color:#e6eefc;font:16px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    .wrap{max-width:980px;margin:32px auto;padding:0 16px}
-    h1{margin:0 0 16px;font-size:28px}
-    .bar{display:flex;gap:10px}
-    input{flex:1;min-width:260px;padding:10px 12px;border-radius:10px;border:1px solid #233046;background:#0b1220;color:#e6eefc}
-    button{padding:10px 14px;border:0;border-radius:10px;background:#22c55e;color:#0b1220;font-weight:700;cursor:pointer}
-    #msg{margin:10px 0 0;color:#9aa4b2;min-height:1.2em}
-    .row{display:flex;flex-wrap:wrap;gap:14px;margin-top:16px}
-    .tile{width:320px;border:1px solid #233046;border-radius:12px;overflow:hidden;background:#0f172a}
-    .lbl{padding:6px 8px;font-size:12px;color:#9aa4b2}
-    .img{display:block;width:100%;height:auto;background:#0b1220}
-    .cap{padding:6px 8px;font-size:12px;color:#9aa4b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <h1>Find neighbor photos</h1>
-    <div class="bar">
-      <input id="url" placeholder="Paste full Cloudinary URL ending in .../CH0928251006.jpg" />
-      <button id="go">Load</button>
-    </div>
-    <div id="msg"></div>
-    <div id="row" class="row"></div>
-  </div>
+<script>
+  // --- CONFIG: set these once ---
+  const CLOUD = "dvqpndvej"; // your cloud name
+  // Default folder when user types just CH... (no URL)
+  // (Update this when your next event folder changes)
+  const BASE_FOLDER = "chiefs-luau/2025/September/09.28.2025";
 
-  <script>
-    const row = document.getElementById('row');
-    const msg = document.getElementById('msg');
+  // ---------- tiny helpers ----------
+  const $ = s => document.querySelector(s);
+  const row = $("#row") || (function(){ const d=document.createElement("div"); d.id="row"; d.style.display="grid"; d.style.gridTemplateColumns="repeat(auto-fit,minmax(280px,1fr))"; d.style.gap="12px"; document.body.appendChild(d); return d; })();
+  const msg = $("#msg") || (function(){ const d=document.createElement("div"); d.id="msg"; d.style.margin="12px 0"; d.style.color="#9aa3ad"; document.body.insertBefore(d, row); return d; })();
 
-    function buildNeighbors(fullUrl){
-      try{
-        const u = new URL(fullUrl.trim());
-        if(!/res\.cloudinary\.com/i.test(u.hostname)) return null;
+  function imgExists(url){
+    return new Promise(res=>{
+      const i = new Image();
+      i.onload = () => res({ok:true, url});
+      i.onerror = () => res({ok:false, url});
+      i.src = url;
+    });
+  }
 
-        const parts = u.pathname.split('/');     // keep entire folder path untouched
-        let file = parts.pop();                  // CH0928251006.jpg
-        const extMatch = file.match(/\.(jpe?g)$/i);
-        if(!extMatch) return null;
-        const ext = extMatch[0];                 // .jpg/.jpeg
-        const nameNoExt = file.replace(/\.(jpe?g)$/i,'');
+  function addTile(url, label){
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.border = "1px solid #2b2f36";
+    card.style.borderRadius = "10px";
+    card.style.overflow = "hidden";
+    card.innerHTML = `
+      <img src="${url}" style="display:block;width:100%;height:auto" />
+      <div style="padding:8px 10px;font:14px system-ui,sans-serif;color:#b7c0c9">
+        <div style="font-weight:600;margin-bottom:4px;color:#9dd6ff">${label}</div>
+        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#8f98a3">${url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}</div>
+      </div>
+    `;
+    row.appendChild(card);
+  }
 
-        const m = nameNoExt.match(/^(.*?)(\d+)$/);
-        if(!m) return null;
-        const prefix = m[1];
-        const digits = m[2];
-        const n = parseInt(digits,10);
-        const pad = digits.length;
+  function parseInput(str){
+    const raw = str.trim();
+    if (!raw) return null;
 
-        const fname = nv => prefix + String(nv).padStart(pad,'0') + ext;
-        const make = withFile => u.origin + parts.concat(withFile).join('/');
-
-        return {
-          prev: make(fname(n-1)),
-          cur : make(fname(n)),
-          next: make(fname(n+1)),
-          labels: {
-            prev:'Previous ('+(n-1)+')',
-            cur :'This photo ('+n+')',
-            next:'Next ('+(n+1)+')'
-          }
-        };
-      }catch(e){ return null; }
+    // Full Cloudinary URL?
+    const m = raw.match(/^https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(.+?)\.(?:jpe?g|png|webp)$/i);
+    if (m) {
+      const full = m[1];                    // e.g. chiefs-luau/.../CH0928251006
+      const folder = full.replace(/\/[^/]+$/, "");
+      const file   = full.split("/").pop();
+      return { folder, file };
     }
 
-    function addTile(url,label){
-      const tile = document.createElement('div');
-      tile.className = 'tile';
-      tile.innerHTML = `
-        <div class="lbl">${label}</div>
-        <img class="img" loading="eager" decoding="async" src="${url}">
-        <div class="cap">${url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}</div>`;
-      tile.querySelector('img').addEventListener('error', () => tile.remove());
-      row.appendChild(tile);
-    }
+    // Otherwise assume it's a short CH... id
+    return { folder: BASE_FOLDER, file: raw };
+  }
 
-    document.getElementById('go').onclick = () => {
-      row.innerHTML = '';
-      msg.textContent = 'Loading…';
-      const input = document.getElementById('url').value;
-      const parsed = buildNeighbors(input);
-      if(!parsed){ msg.textContent='Paste the full URL ending in .jpg or .jpeg.'; return; }
-      msg.textContent = '';
-      addTile(parsed.prev , parsed.labels.prev);
-      addTile(parsed.cur  , parsed.labels.cur );
-      addTile(parsed.next , parsed.labels.next);
-    };
-  </script>
-</body>
-</html>
+  function neighbors(file){
+    const digits = (file.match(/(\d+)$/) || [])[1] || "";
+    const prefix = file.slice(0, file.length - digits.length);
+    const n = parseInt(digits || "0", 10);
+    return [
+      { label: "Previous", file: `${prefix}${n-1}` },
+      { label: "This photo", file: `${prefix}${n}` },
+      { label: "Next",     file: `${prefix}${n+1}` },
+    ];
+  }
+
+  function urlFor(folder, file){
+    return `https://res.cloudinary.com/${CLOUD}/image/upload/${folder}/${file}.jpg`;
+  }
+
+  // Wire the button (keeps your existing input with id="urlInput" or "photoId")
+  (document.getElementById("go") || document.getElementById("goBtn")).onclick = async () => {
+    row.innerHTML = "";
+    msg.textContent = "Loading...";
+    const inputEl = document.getElementById("urlInput") || document.getElementById("photoId") || document.querySelector('input');
+    const parsed = parseInput(inputEl.value || "");
+    if (!parsed) { msg.textContent = "Please enter a Photo ID or Cloudinary URL."; return; }
+
+    const picks = neighbors(parsed.file).map(p => ({ label: p.label, url: urlFor(parsed.folder, p.file) }));
+    const checks = await Promise.all(picks.map(p => imgExists(p.url)));
+    const found = checks.map((c,i)=>({ok:c.ok, url:c.url, label:picks[i].label})).filter(x=>x.ok);
+
+    if (!found.length){
+      msg.textContent = "None of those three images loaded. Double-check the folder and number.";
+      return;
+    }
+    msg.textContent = "Done.";
+    found.forEach(x => addTile(x.url, x.label));
+  };
+</script>
