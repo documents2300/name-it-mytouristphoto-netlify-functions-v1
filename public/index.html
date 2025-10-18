@@ -1,152 +1,123 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Find Neighbor Photos</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background-color: #0d1117;
-      color: #e6edf3;
-      margin: 0;
-      padding: 40px;
-      text-align: center;
-    }
-    h1 {
-      color: #9dd6ff;
-      margin-bottom: 20px;
-    }
-    input {
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid #30363d;
-      background: #161b22;
-      color: #e6edf3;
-      width: 70%;
-      max-width: 600px;
-    }
-    button {
-      padding: 10px 14px;
-      border-radius: 8px;
-      background: #238636;
-      color: white;
-      border: none;
-      margin-left: 6px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-    #msg {
-      margin-top: 15px;
-      font-size: 14px;
-      color: #9aa3ad;
-    }
-    #row {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 16px;
-      margin-top: 30px;
-    }
-    .card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 10px;
-      width: 320px;
-      overflow: hidden;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
-    }
-    .card img {
-      display: block;
-      width: 100%;
-      height: auto;
-    }
-    .card .label {
-      padding: 8px 10px;
-      font-weight: 600;
-      color: #9dd6ff;
-      text-align: left;
-    }
-    .card .url {
-      padding: 0 10px 10px;
-      color: #8fa3b0;
-      font-size: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      text-align: left;
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Find Neighbor Photos</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#9aa3ad;--brand:#9dd6ff;--ok:#238636}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:980px;margin:48px auto;padding:0 20px}
+  h1{margin:0 0 8px;color:var(--brand);font-size:28px}
+  .hint{color:var(--muted);margin:0 0 18px}
+  .bar{display:flex;gap:8px}
+  input{flex:1;min-width:320px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px}
+  button{background:var(--ok);color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+  #msg{margin-top:10px;color:var(--muted)}
+  #row{display:flex;flex-wrap:wrap;gap:16px;margin-top:22px}
+  .card{width:320px;background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .card img{display:block;width:100%;height:auto}
+  .label{padding:8px 10px;color:var(--brand);font-weight:600}
+  .url{padding:0 10px 10px;color:#8fa3b0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
 </head>
 <body>
-  <h1>Find Neighbor Photos</h1>
-  <p>Paste a full Cloudinary URL (like below) and click Load.</p>
-  <p><small>Example:  
-  https://res.cloudinary.com/dvqpndvej/image/upload/chiefs-luau/2025/September/09.28.2025/CH0928251006.jpg</small></p>
+  <div class="wrap">
+    <h1>Find Neighbor Photos</h1>
+    <p class="hint">Paste a full Cloudinary URL (the same one that opens in your browser) and click Load.</p>
+    <p class="hint" style="font-size:13px">
+      Example: https://res.cloudinary.com/dvqpndvej/image/upload/chiefs-luau/2025/September/09.28.2025/CH0928251006.jpg
+    </p>
+    <div class="bar">
+      <input id="urlInput" placeholder="Paste Cloudinary URL ending in .jpg or .jpeg" />
+      <button id="go">Load</button>
+    </div>
+    <div id="msg"></div>
+    <div id="row"></div>
+  </div>
 
-  <input id="urlInput" placeholder="Paste Cloudinary URL ending in .jpg" />
-  <button id="go">Load</button>
-  <div id="msg"></div>
-  <div id="row"></div>
+<script>
+const $ = s => document.querySelector(s);
+const row = $("#row"), msg = $("#msg");
 
-  <script>
-    const $ = s => document.querySelector(s);
-    function imgOk(url){ return new Promise(r => {
-      const i = new Image();
-      i.onload = () => r({ok:true, url});
-      i.onerror = () => r({ok:false, url});
-      i.src = url;
-    });}
-    function addCard(url,label){
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `
-        <img src="${url}" alt="${label}" />
-        <div class="label">${label}</div>
-        <div class="url">${url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}</div>
-      `;
-      $("#row").appendChild(card);
-    }
+function imgOk(url){
+  return new Promise(res => {
+    const img = new Image();
+    img.onload  = () => res({ok:true, url});
+    img.onerror = () => res({ok:false, url});
+    img.src = url;
+  });
+}
 
-    function parseInput(url){
-      const m = url.match(/^https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(.+?)\/([^/]+)\.jpg$/i);
-      if (!m) return null;
-      return { folder: m[1], file: m[2] };
-    }
+// Accepts WITH or WITHOUT version segment (v1759…), .jpg/.jpeg, any cloud name.
+function parseCloudinaryUrl(u){
+  // https://res.cloudinary.com/<cloud>/image/upload/(v123/)?<folder>/<file>.(jpg|jpeg)
+  const re = /^https?:\/\/res\.cloudinary\.com\/([^/]+)\/image\/upload\/(?:v\d+\/)?(.+?)\/([^/]+?)\.(jpe?g)$/i;
+  const m = u.trim().match(re);
+  if(!m) return null;
+  return { cloud:m[1], folder:m[2], file:m[3], ext:m[4].toLowerCase() };
+}
 
-    async function run(){
-      const input = $("#urlInput");
-      const msg = $("#msg");
-      const row = $("#row");
-      row.innerHTML = "";
-      msg.textContent = "Loading...";
+function buildUrl({cloud, folder, file, ext}) {
+  return `https://res.cloudinary.com/${cloud}/image/upload/${folder}/${file}.${ext}`;
+}
 
-      const parsed = parseInput(input.value.trim());
-      if (!parsed){ msg.textContent = "Please enter a full Cloudinary URL ending in .jpg"; return; }
+function suffixNumber(name){
+  const m = name.match(/(\d+)$/);
+  if(!m) return null;
+  const digits = m[1];
+  const n = parseInt(digits, 10);
+  const prefix = name.slice(0, name.length - digits.length);
+  return {prefix, n};
+}
 
-      const m = parsed.file.match(/(\d+)$/);
-      if (!m){ msg.textContent = "Could not find number at end of filename."; return; }
+function addCard(url, label){
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <img src="${url}" alt="${label}">
+    <div class="label">${label}</div>
+    <div class="url">${url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}</div>
+  `;
+  row.appendChild(card);
+}
 
-      const n = parseInt(m[1],10);
-      const prefix = parsed.file.slice(0, parsed.file.length - m[1].length);
+async function run(){
+  row.innerHTML = "";
+  msg.textContent = "Loading…";
 
-      const targets = [
-        {label:"Previous", url:`https://res.cloudinary.com/dvqpndvej/image/upload/${parsed.folder}/${prefix}${n-1}.jpg`},
-        {label:"This photo", url:`https://res.cloudinary.com/dvqpndvej/image/upload/${parsed.folder}/${prefix}${n}.jpg`},
-        {label:"Next", url:`https://res.cloudinary.com/dvqpndvej/image/upload/${parsed.folder}/${prefix}${n+1}.jpg`}
-      ];
+  const input = $("#urlInput").value.trim();
+  const parsed = parseCloudinaryUrl(input);
+  if(!parsed){ msg.textContent = "Please paste the full Cloudinary URL that ends in .jpg or .jpeg."; return; }
 
-      const checks = await Promise.all(targets.map(t => imgOk(t.url)));
-      const found = checks.map((c,i)=>({...targets[i], ok:c.ok})).filter(x=>x.ok);
+  const suf = suffixNumber(parsed.file);
+  if(!suf){ msg.textContent = "The filename doesn’t end in a number (e.g., …1006)."; return; }
 
-      if (!found.length){ msg.textContent = "No images found for that range."; return; }
+  // Build prev / cur / next using SAME cloud, folder, and extension as pasted URL.
+  const prev = buildUrl({ cloud: parsed.cloud, folder: parsed.folder, file: `${suf.prefix}${suf.n-1}`, ext: parsed.ext });
+  const cur  = buildUrl({ cloud: parsed.cloud, folder: parsed.folder, file: `${suf.prefix}${suf.n}`,   ext: parsed.ext });
+  const next = buildUrl({ cloud: parsed.cloud, folder: parsed.folder, file: `${suf.prefix}${suf.n+1}`, ext: parsed.ext });
 
-      msg.textContent = "Done.";
-      found.forEach(x => addCard(x.url, x.label));
-    }
+  const targets = [
+    {label:"Previous", url: prev},
+    {label:"This photo", url: cur},
+    {label:"Next", url: next},
+  ];
 
-    $("#go").onclick = run;
-    $("#urlInput").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
-  </script>
+  const checks = await Promise.all(targets.map(t => imgOk(t.url)));
+  const found = checks.map((c,i)=>({ ...targets[i], ok:c.ok })).filter(x => x.ok);
+
+  if(!found.length){
+    msg.textContent = "No images found for that range. Double-check folder + number (…1005/1006/1007).";
+    return;
+  }
+
+  msg.textContent = "Done.";
+  found.forEach(x => addCard(x.url, x.label));
+}
+
+$("#go").onclick = run;
+$("#urlInput").addEventListener("keydown", e => { if(e.key === "Enter") run(); });
+</script>
 </body>
 </html>
