@@ -3,110 +3,84 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Neighbor photos</title>
+<title>Neighbor Photos</title>
 <style>
-  :root { color-scheme: dark; }
-  body{margin:0;background:#0d1117;color:#c9d1d9;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:960px;margin:48px auto;padding:0 20px}
-  h1{margin:0 0 12px}
-  .card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px}
-  .row{display:flex;flex-wrap:wrap;gap:16px;margin-top:16px}
-  .tile{width:320px;border:1px solid #30363d;border-radius:10px;overflow:hidden;background:#0d1117}
-  .tile img{display:block;width:100%;height:auto}
-  .cap{padding:8px 10px;font-size:13px;color:#8b949e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  input{flex:1;min-width:420px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:8px;padding:10px}
-  button{background:#238636;border:1px solid #2ea043;color:#fff;padding:10px 14px;border-radius:8px;cursor:pointer}
-  .controls{display:flex;gap:8px;margin-top:10px}
-  .msg{margin-top:8px;color:#8b949e;min-height:22px}
-  .label{display:inline-block;font-size:12px;color:#8b949e;border:1px solid #30363d;padding:2px 6px;border-radius:999px;margin:8px}
+  body{margin:0;background:#0d1117;color:#c9d1d9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:900px;margin:60px auto;padding:0 20px}
+  h1{font-size:26px;margin-bottom:10px}
+  .inputBox{display:flex;gap:10px;margin-top:10px}
+  input{flex:1;padding:10px;border:1px solid #333;border-radius:8px;background:#161b22;color:#c9d1d9}
+  button{background:#238636;border:none;border-radius:8px;padding:10px 18px;color:white;cursor:pointer}
+  .row{display:flex;flex-wrap:wrap;gap:16px;margin-top:20px}
+  .tile{width:300px;background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden}
+  .tile img{width:100%;display:block}
+  .tile .cap{padding:6px 8px;font-size:12px;color:#8b949e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .msg{margin-top:10px;color:#8b949e}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Find neighbors for a Cloudinary URL</h1>
-  <div class="card">
-    <div>Paste the full URL (exactly like):<br>
-      <code>https://res.cloudinary.com/dvqpndvej/image/upload/chiefs-luau/2025/September/09.28.2025/CH0928251006.jpg</code>
-    </div>
-    <div class="controls">
-      <input id="inp" placeholder="Full Cloudinary URL (ending in .jpg)"/>
-      <button id="go">Load</button>
-    </div>
-    <div id="msg" class="msg"></div>
+  <h1>Find Neighbor Photos</h1>
+  <p>Paste a full Cloudinary URL (like below), and it will show that photo plus the previous and next ones in the same folder.</p>
+  <code>https://res.cloudinary.com/dvqpndvej/image/upload/chiefs-luau/2025/September/09.28.2025/CH0928251006.jpg</code>
+  <div class="inputBox">
+    <input id="urlInput" placeholder="Paste full Cloudinary URL ending in .jpg">
+    <button id="loadBtn">Load</button>
   </div>
+  <div id="msg" class="msg"></div>
   <div id="row" class="row"></div>
 </div>
 
 <script>
-const row = document.getElementById("row");
-const msg = document.getElementById("msg");
+const row = document.getElementById('row');
+const msg = document.getElementById('msg');
 
-// Turn a full Cloudinary URL into { folder, file } and return neighbors [prev, cur, next]
-function parseAndNeighbors(fullUrl) {
-  // require Cloudinary delivery URL that contains /image/upload/
-  if (!/^https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\//i.test(fullUrl)) return null;
-
-  // strip host up to /upload/
-  let path = fullUrl.replace(/^https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\//i, "");
-  // drop any version segment accidentally present (v1234/)
-  path = path.replace(/^v\d+\//i, "");
-  // separate folder + filename and normalize to .jpg
-  const noQuery = path.split(/[?#]/)[0];
-  const withJpg = noQuery.replace(/\.\w+$/i, ".jpg");
-  const folder = withJpg.replace(/\/[^/]+$/, "");
-  const file   = withJpg.split("/").pop().replace(/\.jpg$/i, "");
-
-  const m = file.match(/(\d+)$/);
-  if (!m) return null;
-  const head = file.slice(0, -m[1].length);
-  const n    = parseInt(m[1], 10);
-
-  const prev = `${head}${n-1}`;
-  const cur  = `${head}${n}`;
-  const next = `${head}${n+1}`;
-  return { folder, prev, cur, next };
-}
-
-function imgExists(url) {
-  return new Promise(res => {
-    const img = new Image();
-    img.onload = () => res({ ok: true, url });
-    img.onerror = () => res({ ok: false, url });
-    img.src = url;
+function imgExists(url){
+  return new Promise(r=>{
+    const i=new Image();
+    i.onload=()=>r({ok:true,url});
+    i.onerror=()=>r({ok:false,url});
+    i.src=url;
   });
 }
 
-function addTile(url, label) {
-  const d = document.createElement("div");
-  d.className = "tile";
-  d.innerHTML = `<div class="label">${label}</div>
-                 <img src="${url}" alt="">
-                 <div class="cap">${url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}</div>`;
-  row.appendChild(d);
+function addTile(url){
+  const div=document.createElement('div');
+  div.className='tile';
+  div.innerHTML=`<img src="${url}"><div class="cap">${url}</div>`;
+  row.appendChild(div);
 }
 
-document.getElementById("go").onclick = async () => {
-  row.innerHTML = "";
-  msg.textContent = "Checking…";
+document.getElementById('loadBtn').onclick=async()=>{
+  row.innerHTML='';
+  msg.textContent='Loading...';
 
-  const input = document.getElementById("inp").value.trim();
-  const parsed = parseAndNeighbors(input);
-  if (!parsed) { msg.textContent = "That doesn't look like a Cloudinary image URL."; return; }
+  const input=document.getElementById('urlInput').value.trim();
+  if(!input.endsWith('.jpg')){
+    msg.textContent='URL must end with .jpg';
+    return;
+  }
 
-  const base = `https://res.cloudinary.com/dvqpndvej/image/upload/${parsed.folder}`;
-  const targets = [
-    { label: "Previous", url: `${base}/${parsed.prev}.jpg` },
-    { label: "This photo", url: `${base}/${parsed.cur}.jpg` },
-    { label: "Next", url: `${base}/${parsed.next}.jpg` },
+  // Extract folder + filename
+  const folder=input.substring(0,input.lastIndexOf('/'));
+  const file=input.substring(input.lastIndexOf('/')+1,input.length-4); // drop .jpg
+  const m=file.match(/(\d+)$/);
+  if(!m){ msg.textContent='Could not find number in filename.'; return; }
+  const prefix=file.slice(0,-m[1].length);
+  const num=parseInt(m[1]);
+
+  const urls=[
+    `${folder}/${prefix}${num-1}.jpg`,
+    `${folder}/${prefix}${num}.jpg`,
+    `${folder}/${prefix}${num+1}.jpg`
   ];
 
-  const checks = await Promise.all(targets.map(t => imgExists(t.url)));
-  const found = checks.map((c,i)=>({ ok:c.ok, ...targets[i] })).filter(x=>x.ok);
+  const results=await Promise.all(urls.map(u=>imgExists(u)));
+  const found=results.filter(x=>x.ok);
 
-  if (!found.length) { msg.textContent = "None of the three images loaded. Double-check the folder and number."; return; }
-
-  msg.textContent = "";
-  found.forEach(t => addTile(t.url, t.label));
+  if(!found.length){ msg.textContent='No images found for that range.'; return; }
+  msg.textContent='';
+  found.forEach(x=>addTile(x.url));
 };
 </script>
 </body>
