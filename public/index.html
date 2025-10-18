@@ -1,121 +1,161 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Find neighbor photos</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Find Neighbor Photos</title>
   <style>
-    :root { color-scheme: dark; }
-    body{margin:0;padding:32px;background:#0f141a;color:#c9d1d9;font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    h1{font-size:28px;margin:0 0 14px}
-    .panel{background:#111820;border:1px solid #22303c;border-radius:12px;padding:14px 16px;max-width:880px}
-    .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:18px}
-    .card{border:1px solid #22303c;border-radius:12px;overflow:hidden;background:#0f141a}
-    .label{font-weight:600;color:#9dd6ff;margin:8px 10px 2px}
-    .url{color:#8f98a3;margin:0 10px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    input{width:100%;background:#0b1116;border:1px solid #22303c;border-radius:8px;color:#e6edf3;padding:10px}
-    button{background:#1f6feb;border:0;border-radius:8px;color:#fff;padding:10px 14px;cursor:pointer}
-    .hint{color:#9aa3ad;margin-top:8px}
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0d1117;
+      color: #e6edf3;
+      margin: 0;
+      padding: 40px;
+      text-align: center;
+    }
+    h1 {
+      color: #9dd6ff;
+      margin-bottom: 20px;
+    }
+    input {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      background: #161b22;
+      color: #e6edf3;
+      width: 70%;
+      max-width: 600px;
+    }
+    button {
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: #238636;
+      color: white;
+      border: none;
+      margin-left: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    #msg {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #9aa3ad;
+    }
+    #row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 30px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      width: 320px;
+      overflow: hidden;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+    .card img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .card .label {
+      padding: 8px 10px;
+      font-weight: 600;
+      color: #9dd6ff;
+      text-align: left;
+    }
+    .card .url {
+      padding: 0 10px 10px;
+      color: #8fa3b0;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: left;
+    }
   </style>
 </head>
 <body>
+
   <h1>Find neighbor photos</h1>
-
-  <div class="panel">
-    <p>Paste a <strong>Cloudinary URL</strong> (the same one that works in your browser) <em>or</em> just the short ID like <code>CH0928251006</code>, then click Load.</p>
-    <div style="display:flex; gap:8px; align-items:center;">
-      <input id="urlInput" placeholder="Full Cloudinary URL or short ID (e.g., CH0928251006)" />
-      <button id="go">Load</button>
-    </div>
-    <div id="msg" class="hint"></div>
-  </div>
-
-  <div id="row" class="row"></div>
+  <p>Paste a Cloudinary URL or just the short ID (e.g., <b>CH0928251006</b>) and click Load.</p>
+  <input id="urlInput" placeholder="Full Cloudinary URL or CH0928251006" />
+  <button id="go">Load</button>
+  <div id="msg"></div>
+  <div id="row"></div>
 
   <script>
-    // --- CONFIG (edit these if your folder changes) ---
+    // --- CONFIG ---
     const CLOUD = "dvqpndvej";
-    // Folder used when customer types just CH... (no folder/URL provided)
-    const BASE_FOLDER = "chiefs-luau/2025/September/09.28.2025";
+    const BASE_FOLDER = "chiefs-luau/2025/September/09.28.2025"; // fixed folder
 
-    // ---------- helpers ----------
+    // --- helpers ---
     const $ = s => document.querySelector(s);
-    const row = $("#row");
-    const msg = $("#msg");
-
-    function addCard(url, label){
-      const el = document.createElement("div");
-      el.className = "card";
-      el.innerHTML = `
-        <img src="${url}" style="display:block;width:100%;height:auto" loading="eager" />
+    function imgOk(url){ return new Promise(r => {
+      const i = new Image();
+      i.onload = () => r({ok:true, url});
+      i.onerror = () => r({ok:false, url});
+      i.src = url;
+    });}
+    function urlFor(folder, file){ return `https://res.cloudinary.com/${CLOUD}/image/upload/${folder}/${file}.jpg`; }
+    function neighbors(file){
+      const m = (file.match(/(\d+)$/)||[])[1]||"";
+      const prefix = file.slice(0, file.length - m.length);
+      const n = parseInt(m||"0",10);
+      return [
+        {label:"Previous", file:`${prefix}${n-1}`},
+        {label:"This photo", file:`${prefix}${n}`},
+        {label:"Next", file:`${prefix}${n+1}`}
+      ];
+    }
+    function addCard(url,label){
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <img src="${url}" alt="${label}" />
         <div class="label">${label}</div>
         <div class="url">${url.replace(/^https?:\/\/[^/]+\/image\/upload\//,'')}</div>
       `;
-      row.appendChild(el);
+      $("#row").appendChild(card);
     }
 
-    function imgExists(url){
-      return new Promise(res=>{
-        const i = new Image();
-        i.onload = () => res({ok:true, url});
-        i.onerror = () => res({ok:false, url});
-        i.src = url;
-      });
-    }
-
-    // Accepts full delivery URL OR short ID
-    function parseInput(raw){
-      const v = (raw || "").trim();
-      if (!v) return null;
-
-      // Full Cloudinary delivery URL, with or without version (v1759...)
-      const m = v.match(/^https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(?:v\d+\/)?(.+?)\.(?:jpe?g|png|webp)$/i);
-      if (m) {
-        const path = m[1];                         // chiefs-luau/.../CH0928251006
-        const folder = path.replace(/\/[^/]+$/,"");
-        const file   = path.split("/").pop();
-        return { folder, file };
+    // Parse either a full Cloudinary URL or short ID
+    function parseInput(v){
+      const raw = (v||"").trim();
+      if (!raw) return null;
+      const m = raw.match(/^https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(?:v\d+\/)?(.+?)\.(?:jpe?g|png|webp)$/i);
+      if (m){
+        const path = m[1];
+        return { folder: path.replace(/\/[^/]+$/,""), file: path.split("/").pop() };
       }
-
-      // Otherwise treat as short CH... and use the configured BASE_FOLDER
-      return { folder: BASE_FOLDER, file: v };
-    }
-
-    function neighborFiles(file){
-      const digits = (file.match(/(\d+)$/) || [])[1] || "";
-      const prefix = file.slice(0, file.length - digits.length);
-      const n = parseInt(digits || "0", 10);
-      return [
-        { label: "Previous", file: `${prefix}${n-1}` },
-        { label: "This photo", file: `${prefix}${n}` },
-        { label: "Next", file: `${prefix}${n+1}` },
-      ];
-    }
-
-    function urlFor(folder, file){
-      return `https://res.cloudinary.com/${CLOUD}/image/upload/${folder}/${file}.jpg`;
+      return { folder: BASE_FOLDER, file: raw.toUpperCase() };
     }
 
     async function run(){
+      const input = $("#urlInput");
+      const msg = $("#msg");
+      const row = $("#row");
       row.innerHTML = "";
       msg.textContent = "Loading...";
 
-      const parsed = parseInput($("#urlInput").value);
-      if (!parsed) { msg.textContent = "Please enter a URL or short ID."; return; }
+      const parsed = parseInput(input.value);
+      if (!parsed){ msg.textContent = "Please enter a URL or short ID."; return; }
 
-      const targets = neighborFiles(parsed.file).map(x => ({ label:x.label, url: urlFor(parsed.folder, x.file) }));
-      const checks = await Promise.all(targets.map(t => imgExists(t.url)));
-      const found = checks.map((c,i)=>({ ok:c.ok, url:c.url, label:targets[i].label})).filter(x=>x.ok);
+      const urls = neighbors(parsed.file).map(x => ({label:x.label, url:urlFor(parsed.folder, x.file)}));
+      const checks = await Promise.all(urls.map(x => imgOk(x.url)));
+      const found = checks.map((c,i)=>({...urls[i], ok:c.ok})).filter(x=>x.ok);
 
-      if (!found.length){
-        msg.textContent = "None of the three images loaded. Double-check the folder and number.";
-        return;
-      }
+      if (!found.length){ msg.textContent = "None of the 3 images loaded. Double-check the ID (CH... uppercase) and folder."; return; }
+
       msg.textContent = "Done.";
       found.forEach(x => addCard(x.url, x.label));
     }
 
-    $("#go").addEventListener("click", run);
+    $("#go").onclick = run;
+    $("#urlInput").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
   </script>
 </body>
 </html>
